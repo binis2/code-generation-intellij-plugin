@@ -1,13 +1,19 @@
 plugins {
     id("java")
-    id("org.jetbrains.intellij") version "1.13.1"
+    id("org.jetbrains.intellij") version "1.13.2"
+    id("io.freefair.lombok") version "5.3.3.3"
 }
 
 group = "net.binis.intellij"
-version = "1.0-SNAPSHOT"
+version = "1.0.3"
 
 repositories {
+    mavenLocal()
     mavenCentral()
+}
+
+dependencies {
+    implementation("dev.binis:code-generator:1.0.3")
 }
 
 // Configure Gradle IntelliJ Plugin

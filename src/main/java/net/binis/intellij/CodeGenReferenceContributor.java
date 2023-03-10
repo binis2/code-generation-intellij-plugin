@@ -37,10 +37,6 @@ public class CodeGenReferenceContributor extends PsiReferenceContributor {
                                     "value".equals(pair.getName()) &&
                                     pair.getParent() instanceof PsiAnnotationParameterList list &&
                                     "javax.annotation.processing.Generated".equals(ann.getQualifiedName())) {
-                                //var ann = PsiTreeUtil.getParentOfType(element, PsiAnnotation.class);
-                                //var cls = AllClassesSearch.search(ProjectScope.getAllScope(element.getProject()), element.getProject(), s -> s.equals(element.getText())).findFirst();
-                                //FileBasedIndex.getInstance().
-                                //OrderEnumerator.orderEntries()
                                 var value = (String) expression.getValue();
                                 return buildClassReferences(element, value);
                             } else if ("net.binis.codegen.annotation.Default".equals(ann.getQualifiedName())) {

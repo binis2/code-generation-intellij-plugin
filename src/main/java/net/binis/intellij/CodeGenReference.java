@@ -38,17 +38,7 @@ public class CodeGenReference extends PsiReferenceBase<PsiElement> implements Ps
 
     @Override
     public Object @NotNull [] getVariants() {
-//        Project project = myElement.getProject();
-//        List<SimpleProperty> properties = SimpleUtil.findProperties(project);
         List<LookupElement> variants = new ArrayList<>();
-//        for (final SimpleProperty property : properties) {
-//            if (property.getKey() != null && property.getKey().length() > 0) {
-//                variants.add(LookupElementBuilder
-//                        .create(property).withIcon(SimpleIcons.FILE)
-//                        .withTypeText(property.getContainingFile().getName())
-//                );
-//            }
-//        }
         return variants.toArray();
     }
 
