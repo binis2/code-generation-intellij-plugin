@@ -25,12 +25,12 @@ public class CodeGenLineMarkerProvider extends RelatedItemLineMarkerProvider {
     @Override
     protected void collectNavigationMarkers(@NotNull PsiElement element,
                                             @NotNull Collection<? super RelatedItemLineMarkerInfo<?>> result) {
-        if (element instanceof PsiClass cls && Lookup.isPrototype(cls)) {
+        if (element instanceof PsiIdentifier && element.getParent() instanceof PsiClass cls && Lookup.isPrototype(cls)) {
             var ident = Lookup.findIdentifier(cls);
             NavigationGutterIconBuilder<PsiElement> builder =
                     NavigationGutterIconBuilder.create(CodeGenIcons.GENERATE)
                             .setAlignment(GutterIconRenderer.Alignment.RIGHT)
-                            .setTargets(nonNull(ident) ? ident : element)
+                            .setTargets(nonNull(ident) ? ident : element.getParent())
                             .setTooltipText("Generate files");
             result.add(builder.createLineMarkerInfo(element, IconGutterHandler.INSTANCE));
         }
