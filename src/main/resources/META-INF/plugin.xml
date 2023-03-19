@@ -8,13 +8,21 @@
     <name>Binis CodeGen</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-    <vendor email="binisbelev@gmail.com" url="https://binis.dev">Binis CodeGen</vendor>
+    <vendor email="binisbelev@gmail.com" url="https://github.com/binis2/code-generation">Binis CodeGen</vendor>
 
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
     <description><![CDATA[
-    Plugin to ease development when using Binis CodeGen.
+    Plugin to ease development when using <a href='https://github.com/binis2/code-generation'>Binis CodeGen</a> framework.
+
+    This plugin provides:
+
+    <ul>
+    <li>Navigation between the prototypes and generated objects.</li>
+    <li>Highlighting of common mistakes made when using the framework.</li>
+    <li>Gutter icon to allow fast regeneration of the selected prototype.</li>
+    </ul>
   ]]></description>
 
     <!-- Product and plugin compatibility requirements.
@@ -39,5 +47,10 @@
         <annotator language="JAVA" implementationClass="net.binis.intellij.CodeGenAnnotator"/>
         <codeInsight.lineMarkerProvider language="JAVA"
                                         implementationClass="net.binis.intellij.CodeGenLineMarkerProvider"/>
+<!--        <lang.findUsagesProvider language="JAVA"-->
+<!--                                 implementationClass="net.binis.intellij.usages.CodeGenUsagesProvider"/>-->
+        <findUsagesHandlerFactory
+                implementation="net.binis.intellij.usages.CodeGenFindUsagesHandlerFactory"/>
+        <implicitUsageProvider implementation="net.binis.intellij.usages.CodeGenImplicitUsageProvider"/>
     </extensions>
 </idea-plugin>

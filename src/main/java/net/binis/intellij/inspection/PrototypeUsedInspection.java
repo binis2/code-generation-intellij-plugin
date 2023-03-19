@@ -5,6 +5,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
+import net.binis.codegen.annotation.type.GenerationStrategy;
 import net.binis.intellij.tools.Lookup;
 import org.jetbrains.annotations.NotNull;
 
@@ -12,7 +13,7 @@ import static java.util.Objects.nonNull;
 
 public class PrototypeUsedInspection extends AbstractBaseJavaLocalInspectionTool {
 
-    private Logger log = Logger.getInstance(PrototypeUsedInspection.class);
+    private final Logger log = Logger.getInstance(PrototypeUsedInspection.class);
 
     private final QuickFix myQuickFix = new QuickFix();
 
@@ -28,7 +29,7 @@ public class PrototypeUsedInspection extends AbstractBaseJavaLocalInspectionTool
 
             @Override
             public void visitElement(@NotNull PsiElement element) {
-                if (shouldProcess(element) && element instanceof PsiJavaCodeReferenceElement ref) {
+                if (element instanceof PsiJavaCodeReferenceElement ref && shouldProcess(element)) {
                     checkForError(element, ref.getQualifiedName(), holder);
                 }
                 super.visitElement(element);
@@ -46,10 +47,13 @@ public class PrototypeUsedInspection extends AbstractBaseJavaLocalInspectionTool
     }
 
     protected void checkForError(PsiElement element, String cls, ProblemsHolder holder) {
-        if (Lookup.isPrototype(cls)) {
-            holder.registerProblem(element,
-                    InspectionBundle.message("inspection.binis.codegen.problem.descriptor"),
-                    myQuickFix);
+        if (!(element.getParent() instanceof PsiAnnotation)) {
+            var data = Lookup.getPrototypeData(cls);
+            if (nonNull(data) && GenerationStrategy.CLASSIC.equals(data.getStrategy())) {
+                holder.registerProblem(element,
+                        InspectionBundle.message("inspection.binis.codegen.problem.descriptor"),
+                        myQuickFix);
+            }
         }
     }
 
