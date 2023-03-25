@@ -26,7 +26,7 @@ public class CodeGenFindUsagesHandlerFactory extends FindUsagesHandlerFactory {
                 return true;
             }
 
-            return element instanceof PsiMethod field && field.getParent() instanceof PsiClass cls && cls.isInterface() && (Lookup.isPrototype(cls));
+            return element instanceof PsiMethod field && field.getParent() instanceof PsiClass cls && cls.isInterface() && (Lookup.isPrototype(cls) || Lookup.isGenerated(cls));
         }
         return false;
     }
@@ -47,26 +47,39 @@ public class CodeGenFindUsagesHandlerFactory extends FindUsagesHandlerFactory {
                         result.add(generated.get());
                         return result.toArray(PsiElement[]::new);
                     }
-                } else if (element instanceof PsiMethod method && method.getParent() instanceof PsiClass cls) {
-                    var name = Lookup.getGeneratedName(cls.getQualifiedName());
-                    var generated = Lookup.findClass(name);
-                    if (generated.isPresent()) {
-                        var result = new ArrayList<PsiElement>();
-                        Arrays.stream(generated.get().getAllMethods())
-                                .filter(m ->
-                                        method.getName().equals(m.getName()) ||
-                                                (nonNull(m.getReturnType()) && m.getName().equals(Helpers.getGetterName(method.getName(), m.getReturnType().getPresentableText()))))
-                                .forEach(result::add);
-                        Arrays.stream(generated.get().getAllMethods()).filter(m -> "with".equals(m.getName())).findFirst().ifPresent(m ->
-                                notNull(m.getReturnType(), type ->
-                                        Lookup.findClass(type.getCanonicalText()).ifPresent(c ->
-                                                Arrays.stream(c.getAllMethods()).filter(w ->
-                                                        method.getName().equals(w.getName())).forEach(result::add))));
-                        if (!result.isEmpty()) {
-                            return result.toArray(PsiElement[]::new);
+                } else if (element instanceof PsiMethod method && method.getParent() instanceof PsiClass cls && nonNull(cls.getQualifiedName())) {
+                    if (Lookup.isPrototype(cls)) {
+                        var name = Lookup.getGeneratedName(cls.getQualifiedName());
+                        var generated = Lookup.findClass(name);
+                        if (generated.isPresent()) {
+                            var result = new ArrayList<PsiElement>();
+                            Arrays.stream(generated.get().getAllMethods())
+                                    .filter(m ->
+                                            method.getName().equals(m.getName()) ||
+                                                    (nonNull(m.getReturnType()) && m.getName().equals(Helpers.getGetterName(method.getName(), m.getReturnType().getPresentableText()))))
+                                    .forEach(result::add);
+                            Arrays.stream(generated.get().getAllMethods()).filter(m -> "with".equals(m.getName())).findFirst().ifPresent(m ->
+                                    notNull(m.getReturnType(), type ->
+                                            Lookup.findClass(type.getCanonicalText()).ifPresent(c ->
+                                                    Arrays.stream(c.getAllMethods()).filter(w ->
+                                                            method.getName().equals(w.getName())).forEach(result::add))));
+                            if (!result.isEmpty()) {
+                                return result.toArray(PsiElement[]::new);
+                            }
+                        }
+                    } else {
+                        var proto = Lookup.getPrototypeClass(cls);
+                        if (nonNull(proto)) {
+                            var result = new ArrayList<PsiElement>();
+                            var name = method.getName().startsWith("get") || method.getName().startsWith("is") ? Helpers.getFieldName(method.getName()) : method.getName();
+                            Arrays.stream(proto.getAllMethods())
+                                    .filter(m -> name.equals(m.getName()))
+                                    .forEach(result::add);
+                            if (!result.isEmpty()) {
+                                return result.toArray(PsiElement[]::new);
+                            }
                         }
                     }
-
                 }
 
                 return PsiElement.EMPTY_ARRAY;

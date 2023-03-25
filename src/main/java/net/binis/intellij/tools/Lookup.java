@@ -110,6 +110,11 @@ public class Lookup {
 
     public static boolean isGenerated(PsiClass cls) {
         if (nonNull(cls) && nonNull(cls.getQualifiedName())) {
+            if (cls.getParent() instanceof PsiClass parent && nonNull(parent.getQualifiedName())) {
+                if (isGenerated(parent)) {
+                    return true;
+                }
+            }
             return isGenerated(cls.getQualifiedName());
         }
         return false;
@@ -145,6 +150,21 @@ public class Lookup {
 
         return null;
     }
+
+    public static PsiClass getPrototypeClass(PsiClass cls) {
+        if (nonNull(cls.getQualifiedName())) {
+            if (cls.getParent() instanceof PsiClass parent) {
+                var result = getPrototypeClass(parent);
+                if (nonNull(result)) {
+                    return result;
+                }
+            }
+            return getPrototypeClass(cls.getQualifiedName());
+        }
+
+        return null;
+    }
+
 
 
     public static Optional<PsiClass> findClass(String name) {
