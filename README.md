@@ -9,7 +9,12 @@ IntelliJ Idea Plugin to ease development when using [Binis CodeGen framework](ht
 * Gutter icon to allow fast regeneration of the selected prototype.
 * Extends Find Usages to take prototypes into account.
 
-![generate](https://github.com/binis2/code-generation-intellij-plugin/raw/master/images/GenerateFiles.png "Generate Files")
+### Examples
+
+Easy to access button for (re)generation of source files.  
+![generate](https://github.com/binis2/code-generation-intellij-plugin/raw/master/images/GenerateFiles.png "Generate Files")  
+   
+Handy link to prototype that generated the class.   
 ![navigation](https://github.com/binis2/code-generation-intellij-plugin/raw/master/images/Navigation.png "Navigation")
 
 ### Other modules of the suite
