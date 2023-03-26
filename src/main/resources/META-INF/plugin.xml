@@ -22,6 +22,7 @@
     <li>Navigation between the prototypes and generated objects.</li>
     <li>Highlighting of common mistakes made when using the framework.</li>
     <li>Gutter icon to allow fast regeneration of the selected prototype.</li>
+    <li>Extends Find Usages to take prototypes into account.</li>
     </ul>
   ]]></description>
 
