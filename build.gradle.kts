@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.binis.intellij"
-version = "1.0.5"
+version = "1.0.6"
 
 repositories {
     mavenLocal()
@@ -13,13 +13,13 @@ repositories {
 }
 
 dependencies {
-    implementation("dev.binis:code-generator:1.0.5")
+    implementation("dev.binis:code-generator:1.0.6")
 }
 
 // Configure Gradle IntelliJ Plugin
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
 intellij {
-    version.set("2022.3.2")
+    version.set("2022.3.3")
     type.set("IC") // Target IDE Platform
 
     plugins.set(listOf("com.intellij.java"))
