@@ -13,7 +13,7 @@ repositories {
 }
 
 dependencies {
-    implementation("dev.binis:code-generator:1.0.6")
+    implementation("dev.binis:code-generator:1.0.7")
 }
 
 // Configure Gradle IntelliJ Plugin
