@@ -2,6 +2,7 @@ package net.binis.intellij.tools;
 
 import com.github.javaparser.ast.expr.Name;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
@@ -34,18 +35,24 @@ public class Lookup {
     public static final Set<String> STARTERS = Set.of("create", "with", "find", "builder");
 
     public static void registerClass(PsiClass cls) {
-        if (nonNull(cls.getQualifiedName())) {
-            classes.put(cls.getQualifiedName(), LookupDescription.builder()
-                    .cls(cls)
-                    .prototype(Arrays.stream(cls.getAnnotations())
-                            .map(a ->
-                                    Optional.ofNullable(Lookup.isPrototypeAnnotation(a)))
-                            .filter(Optional::isPresent)
-                            .map(Optional::get)
-                            .findFirst()
-                            .orElse(null))
-                    .build());
-            checkGenerated(cls);
+        try {
+            if (nonNull(cls.getQualifiedName())) {
+                classes.put(cls.getQualifiedName(), LookupDescription.builder()
+                        .cls(cls)
+                        .prototype(Arrays.stream(cls.getAnnotations())
+                                .map(a ->
+                                        Optional.ofNullable(Lookup.isPrototypeAnnotation(a)))
+                                .filter(Optional::isPresent)
+                                .map(Optional::get)
+                                .findFirst()
+                                .orElse(null))
+                        .build());
+                checkGenerated(cls);
+            }
+        } catch (ProcessCanceledException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to register class: " + cls.getQualifiedName(), e);
         }
     }
 
@@ -185,14 +192,18 @@ public class Lookup {
     }
 
     public static PrototypeData isPrototypeAnnotation(PsiAnnotation proto) {
-        if (nonNull(proto.getQualifiedName())) {
-            var result = protoypes.get(proto.getQualifiedName());
+        return isPrototypeAnnotation(proto.getQualifiedName());
+    }
+
+    public static PrototypeData isPrototypeAnnotation(String name) {
+        if (nonNull(name)) {
+            var result = protoypes.get(name);
 
             if (nonNull(result)) {
                 return result;
             }
 
-            return discoverAnnotation(proto.getQualifiedName());
+            return discoverAnnotation(name);
         }
         return null;
     }
@@ -282,8 +293,24 @@ public class Lookup {
         return false;
     }
 
+    public static String getGeneratedName(PsiClass cls) {
+        return getGeneratedName(cls.getQualifiedName(), cls.getParent() instanceof PsiClass);
+    }
+
     public static String getGeneratedName(String name) {
+        var cls = findClass(name);
+        return getGeneratedName(name, cls.map(c ->
+                c.getParent() instanceof PsiClass).orElse(false));
+    }
+
+    public static String getGeneratedName(String name, boolean isNested) {
         //TODO: Take annotation overrides into account
+
+        if (isNested) {
+            var cls = name.substring(name.lastIndexOf("."));
+            name = name.substring(0, name.lastIndexOf("."));
+            name = name.substring(0, name.lastIndexOf(".")) + cls;
+        }
         if (name.endsWith("Prototype")) {
             name = name.substring(0, name.length() - 9);
             if (name.endsWith("Entity")) {
@@ -292,6 +319,7 @@ public class Lookup {
         }
         return name.replace(".prototype.", ".");
     }
+
 
     public static PsiMethodCallExpression findRoot(PsiMethodCallExpression expression) {
         if (STARTERS.contains(expression.getMethodExpression().getReferenceName()) && expression.getArgumentList().isEmpty()) {
