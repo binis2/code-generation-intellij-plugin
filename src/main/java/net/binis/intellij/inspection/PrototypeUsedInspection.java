@@ -7,13 +7,13 @@ import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
 import net.binis.codegen.annotation.type.GenerationStrategy;
 import net.binis.intellij.tools.Lookup;
+import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import static java.util.Objects.nonNull;
 
 public class PrototypeUsedInspection extends AbstractBaseJavaLocalInspectionTool {
-
-    private final Logger log = Logger.getInstance(PrototypeUsedInspection.class);
 
     private final QuickFix myQuickFix = new QuickFix();
 
@@ -55,6 +55,11 @@ public class PrototypeUsedInspection extends AbstractBaseJavaLocalInspectionTool
                         myQuickFix);
             }
         }
+    }
+
+    @Override
+    public @Nullable @Nls String getStaticDescription() {
+        return "Checks if the prototype is used instead of the generated object!.";
     }
 
     private static class QuickFix implements LocalQuickFix {
