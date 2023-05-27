@@ -3,17 +3,24 @@ package net.binis.intellij.tools;
 import com.github.javaparser.ast.expr.Name;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.ProjectManager;
+import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.task.ProjectTaskManager;
 import lombok.Builder;
 import lombok.Data;
 import net.binis.codegen.annotation.CodePrototypeTemplate;
 import net.binis.codegen.annotation.type.GenerationStrategy;
 import net.binis.codegen.discovery.Discoverer;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
+import net.binis.intellij.services.CodeGenProjectService;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.concurrency.Promise;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,14 +41,24 @@ public class Lookup {
 
     public static final Set<String> STARTERS = Set.of("create", "with", "find", "builder");
 
+    public static final Map<Project, CodeGenProjectService> projects = new ConcurrentHashMap<>();
+
     public static void registerClass(PsiClass cls) {
         try {
             if (nonNull(cls.getQualifiedName())) {
                 classes.put(cls.getQualifiedName(), LookupDescription.builder()
                         .cls(cls)
                         .prototype(Arrays.stream(cls.getAnnotations())
-                                .map(a ->
-                                        Optional.ofNullable(Lookup.isPrototypeAnnotation(a)))
+                                .map(a -> {
+                                    var data = isPrototypeAnnotation(a);
+                                    if (nonNull(data)) {
+                                        var builder = copyData(data);
+                                        readAnnotation(a, builder);
+                                        return Optional.of(builder.build());
+                                    } else {
+                                        return Optional.<PrototypeData>empty();
+                                    }
+                                })
                                 .filter(Optional::isPresent)
                                 .map(Optional::get)
                                 .findFirst()
@@ -53,7 +70,14 @@ public class Lookup {
             throw e;
         } catch (Exception e) {
             log.error("Failed to register class: " + cls.getQualifiedName(), e);
+        } finally {
+            projects.computeIfAbsent(cls.getProject(), p ->
+                    p.getService(CodeGenProjectService.class));
         }
+    }
+
+    public static PrototypeData getPrototypeData(PsiClass cls) {
+        return getPrototypeData(cls.getQualifiedName());
     }
 
     public static PrototypeData getPrototypeData(String name) {
@@ -146,6 +170,10 @@ public class Lookup {
         return generated.get(name);
     }
 
+    public static String getPrototype(PsiClass cls) {
+        return getPrototype(cls.getQualifiedName());
+    }
+
     public static PsiClass getPrototypeClass(String name) {
         var proto = generated.get(name);
         if (nonNull(proto)) {
@@ -171,7 +199,6 @@ public class Lookup {
 
         return null;
     }
-
 
 
     public static Optional<PsiClass> findClass(String name) {
@@ -304,7 +331,31 @@ public class Lookup {
     }
 
     public static String getGeneratedName(String name, boolean isNested) {
-        //TODO: Take annotation overrides into account
+        var className = "";
+        var classPath = "";
+        var impl = false;
+        var proto = getPrototypeData(name);
+        if (nonNull(proto)) {
+            if (GenerationStrategy.IMPLEMENTATION.equals(proto.getStrategy())) {
+                className = proto.getClassName();
+                classPath = proto.getClassPackage();
+                impl = true;
+            } else {
+                className = proto.getInterfaceName();
+                classPath = proto.getInterfacePackage();
+            }
+
+            if (StringUtils.isNotBlank(className)) {
+                if (StringUtils.isNotBlank(classPath)) {
+                    return classPath + "." + className;
+                } else {
+                    name = name.substring(0, name.lastIndexOf(".") + 1) + className;
+                    impl = false;
+                }
+            } else if (StringUtils.isNotBlank(classPath)) {
+                name = classPath + "." + name.substring(name.lastIndexOf(".") + 1);
+            }
+        }
 
         if (isNested) {
             var cls = name.substring(name.lastIndexOf("."));
@@ -317,7 +368,13 @@ public class Lookup {
                 name = name.substring(0, name.length() - 6);
             }
         }
-        return name.replace(".prototype.", ".");
+        name = name.replace(".prototype.", ".");
+
+        if (impl) {
+            name = name + "Impl";
+        }
+
+        return name;
     }
 
 
@@ -381,7 +438,7 @@ public class Lookup {
                     }
                     case "interfaceName" -> {
                         if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            builder.name((String) exp.getValue());
+                            builder.interfaceName((String) exp.getValue());
                         }
                     }
                     case "classGetters" -> {
@@ -488,29 +545,39 @@ public class Lookup {
                         switch (method.getName()) {
                             case "base" -> builder.base(handleBooleanExpression(method.getDefaultValue()));
                             case "name" -> builder.name(handleStringExpression(method.getDefaultValue()));
-                            case "generateConstructor" -> builder.generateConstructor(handleBooleanExpression(method.getDefaultValue()));
+                            case "generateConstructor" ->
+                                    builder.generateConstructor(handleBooleanExpression(method.getDefaultValue()));
 //                            case "options" ->
 //                                    builder.options(handleClassExpression(method.getDefaultValue().get(), Set.class));
-                            case "interfaceName" -> builder.interfaceName(handleStringExpression(method.getDefaultValue()));
-                            case "implementationPath" -> builder.implementationPath(handleStringExpression(method.getDefaultValue()));
+                            case "interfaceName" ->
+                                    builder.interfaceName(handleStringExpression(method.getDefaultValue()));
+                            case "implementationPath" ->
+                                    builder.implementationPath(handleStringExpression(method.getDefaultValue()));
 //                            case "enrichers" ->
 //                                    builder.predefinedEnrichers(handleClassExpression(method.getDefaultValue().get(), List.class));
 //                            case "inheritedEnrichers" ->
 //                                    builder.predefinedInheritedEnrichers(handleClassExpression(method.getDefaultValue().get(), List.class));
-                            case "interfaceSetters" -> builder.interfaceSetters(handleBooleanExpression(method.getDefaultValue()));
-                            case "classGetters" -> builder.classGetters(handleBooleanExpression(method.getDefaultValue()));
-                            case "classSetters" -> builder.classSetters(handleBooleanExpression(method.getDefaultValue()));
+                            case "interfaceSetters" ->
+                                    builder.interfaceSetters(handleBooleanExpression(method.getDefaultValue()));
+                            case "classGetters" ->
+                                    builder.classGetters(handleBooleanExpression(method.getDefaultValue()));
+                            case "classSetters" ->
+                                    builder.classSetters(handleBooleanExpression(method.getDefaultValue()));
 //                            case "baseModifierClass" ->
 //                                    builder.baseModifierClass(handleClassExpression(method.getDefaultValue().get()));
 //                            case "mixInClass" ->
 //                                    builder.mixInClass(handleClassExpression(method.getDefaultValue().get()));
-                            case "interfacePath" -> builder.interfacePath(handleStringExpression(method.getDefaultValue()));
-                            case "generateInterface" -> builder.generateInterface(handleBooleanExpression(method.getDefaultValue()));
+                            case "interfacePath" ->
+                                    builder.interfacePath(handleStringExpression(method.getDefaultValue()));
+                            case "generateInterface" ->
+                                    builder.generateInterface(handleBooleanExpression(method.getDefaultValue()));
                             case "basePath" -> builder.basePath(handleStringExpression(method.getDefaultValue()));
-                            case "generateImplementation" -> builder.generateImplementation(handleBooleanExpression(method.getDefaultValue()));
-                            case "implementationPackage" -> builder.classPackage(handleStringExpression(method.getDefaultValue()));
-//                            case "strategy" ->
-//                                    builder.strategy(handleEnumExpression(method.getDefaultValue().get(), GenerationStrategy.class));
+                            case "generateImplementation" ->
+                                    builder.generateImplementation(handleBooleanExpression(method.getDefaultValue()));
+                            case "implementationPackage" ->
+                                    builder.classPackage(handleStringExpression(method.getDefaultValue()));
+                            case "strategy" ->
+                                    builder.strategy(handleEnumExpression(method.getDefaultValue(), GenerationStrategy.class));
                             default -> builder.custom(method.getName(), method.getDefaultValue());
                         }
                     });
@@ -531,6 +598,56 @@ public class Lookup {
             return (String) exp.getValue();
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    protected static <T extends Enum> T handleEnumExpression(PsiAnnotationMemberValue value, Class<T> enumClass) {
+        try {
+            return (T) Enum.valueOf(enumClass, value.getText().substring(value.getText().lastIndexOf('.') + 1));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+
+    public static Set<Module> refreshCache(VirtualFile file) {
+        var result = new HashSet<Module>();
+        var list = List.copyOf(classes.values());
+        list.stream()
+                .filter(desc ->
+                        desc.cls.getContainingFile().getVirtualFile().equals(file))
+                .forEach(desc -> {
+                        if (nonNull(classes.remove(desc.cls.getQualifiedName()))) {
+                            result.add(getModule(desc.cls));
+                        }
+                });
+        return result;
+    }
+
+    public static Module getModule(PsiElement element) {
+        return ProjectFileIndex.getInstance(element.getProject()).getModuleForFile(element.getContainingFile().getVirtualFile());
+    }
+
+    public static Promise<ProjectTaskManager.Result> rebuildModule(Module module) {
+        return ProjectTaskManager.getInstance(module.getProject()).build(module);
+    }
+
+    private static PrototypeDataHandler.PrototypeDataHandlerBuilder copyData(PrototypeData data) {
+        return PrototypeDataHandler.builder()
+                .base(data.isBase())
+                .name(data.getName())
+                .generateConstructor(data.isGenerateConstructor())
+                .interfaceName(data.getInterfaceName())
+                .interfaceSetters(data.isInterfaceSetters())
+                .classGetters(data.isClassGetters())
+                .classSetters(data.isClassSetters())
+                .generateInterface(data.isGenerateInterface())
+                .generateImplementation(data.isGenerateImplementation())
+                .classPackage(data.getClassPackage())
+                .strategy(data.getStrategy())
+                .basePath(data.getBasePath())
+                .interfacePath(data.getInterfacePath())
+                .implementationPath(data.getImplementationPath());
     }
 
     @Builder

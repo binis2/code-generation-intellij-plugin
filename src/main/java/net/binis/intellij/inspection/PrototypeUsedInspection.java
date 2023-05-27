@@ -1,7 +1,9 @@
 package net.binis.intellij.inspection;
 
-import com.intellij.codeInspection.*;
-import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.codeInspection.AbstractBaseJavaLocalInspectionTool;
+import com.intellij.codeInspection.LocalQuickFix;
+import com.intellij.codeInspection.ProblemDescriptor;
+import com.intellij.codeInspection.ProblemsHolder;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -49,7 +51,7 @@ public class PrototypeUsedInspection extends AbstractBaseJavaLocalInspectionTool
     protected void checkForError(PsiElement element, String cls, ProblemsHolder holder) {
         if (!(element.getParent() instanceof PsiAnnotation)) {
             var data = Lookup.getPrototypeData(cls);
-            if (nonNull(data) && GenerationStrategy.CLASSIC.equals(data.getStrategy())) {
+            if (nonNull(data) && GenerationStrategy.PROTOTYPE.equals(data.getStrategy())) {
                 holder.registerProblem(element,
                         InspectionBundle.message("inspection.binis.codegen.problem.descriptor"),
                         myQuickFix);

@@ -43,9 +43,9 @@ public class CodeGenLineMarkerProvider extends RelatedItemLineMarkerProvider {
 
         @Override
         public void navigate(MouseEvent e, PsiElement element) {
-            var module = ProjectFileIndex.getInstance(element.getProject()).getModuleForFile(element.getContainingFile().getVirtualFile());
+            var module = Lookup.getModule(element);
             if (nonNull(module)) {
-                ProjectTaskManager.getInstance(element.getProject()).build(module);
+                Lookup.rebuildModule(module);
             }
         }
     }

@@ -105,9 +105,9 @@ public class CodeGenAnnotator implements Annotator {
                     var intf = Lookup.getGeneratedName(cls);
                     var intfCls = Lookup.findClass(intf);
                     var ident = Lookup.findIdentifier(cls);
-                    if (nonNull(ident) && intfCls.map(PsiElement::getContainingFile).isPresent()) {
+                    if (nonNull(ident)) {
                         holder.newAnnotation(HighlightSeverity.INFORMATION, "test")
-                                .tooltip("Generates <a href=\"#navigation/" + intfCls.map(psiClass -> (psiClass.getContainingFile().getVirtualFile().getCanonicalPath() + ":" + psiClass.getTextOffset())).orElse("unknown") + "\">" + intf + "</a>")
+                                .tooltip((intfCls.map(PsiElement::getContainingFile).isPresent() ? "Generated" : "Generates") + " <a href=\"#navigation/" + intfCls.map(psiClass -> (psiClass.getContainingFile().getVirtualFile().getCanonicalPath() + ":" + psiClass.getTextOffset())).orElse("unknown") + "\">" + intf + "</a>")
                                 .range(ident.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.CLASS_NAME).create();
                     }
                 } else if (Lookup.isGenerated(cls.getQualifiedName())) {
@@ -135,7 +135,7 @@ public class CodeGenAnnotator implements Annotator {
                         var intf = Lookup.getGeneratedName(ref.getQualifiedName());
                         var intfCls = Lookup.findClass(intf);
                         if (intfCls.map(PsiElement::getContainingFile).isPresent()) {
-                            if (ref.getParent() instanceof PsiAnnotation || !GenerationStrategy.CLASSIC.equals(data.getStrategy())) {
+                            if (ref.getParent() instanceof PsiAnnotation || !GenerationStrategy.PROTOTYPE.equals(data.getStrategy())) {
                                 holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
                                         .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.KEYWORD).create();
                             } else {

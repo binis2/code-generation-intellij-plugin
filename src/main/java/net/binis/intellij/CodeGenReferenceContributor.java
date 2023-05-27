@@ -16,8 +16,6 @@ import static java.util.Objects.nonNull;
 
 public class CodeGenReferenceContributor extends PsiReferenceContributor {
 
-    private Logger log = Logger.getInstance(CodeGenReferenceContributor.class);
-
     @Override
     public void registerReferenceProviders(@NotNull PsiReferenceRegistrar registrar) {
         registrar.registerReferenceProvider(PlatformPatterns.psiElement(PsiLiteralExpression.class),

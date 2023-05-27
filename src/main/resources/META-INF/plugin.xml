@@ -48,10 +48,17 @@
         <annotator language="JAVA" implementationClass="net.binis.intellij.CodeGenAnnotator"/>
         <codeInsight.lineMarkerProvider language="JAVA"
                                         implementationClass="net.binis.intellij.CodeGenLineMarkerProvider"/>
-<!--        <lang.findUsagesProvider language="JAVA"-->
-<!--                                 implementationClass="net.binis.intellij.usages.CodeGenUsagesProvider"/>-->
+        <!--        <lang.findUsagesProvider language="JAVA"-->
+        <!--                                 implementationClass="net.binis.intellij.usages.CodeGenUsagesProvider"/>-->
         <findUsagesHandlerFactory
                 implementation="net.binis.intellij.usages.CodeGenFindUsagesHandlerFactory"/>
         <implicitUsageProvider implementation="net.binis.intellij.usages.CodeGenImplicitUsageProvider"/>
+        <!--        <applicationService-->
+        <!--                serviceImplementation="net.binis.intellij.services.CodeGenApplicationService"/>-->
+        <projectService serviceImplementation="net.binis.intellij.services.CodeGenProjectService"/>
     </extensions>
+    <applicationListeners>
+        <listener class="net.binis.intellij.listeners.CodeGenManagerListener"
+                  topic="com.intellij.openapi.project.ProjectManagerListener"/>
+    </applicationListeners>
 </idea-plugin>
