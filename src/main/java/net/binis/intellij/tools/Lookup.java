@@ -3,6 +3,7 @@ package net.binis.intellij.tools;
 import com.github.javaparser.ast.expr.Name;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.ProjectManager;
@@ -119,24 +120,28 @@ public class Lookup {
     }
 
     public static boolean isGenerated(String name) {
-        if (nonNull(name)) {
-            if (generated.containsKey(name)) {
-                return true;
-            }
+        try {
+            if (nonNull(name)) {
+                if (generated.containsKey(name)) {
+                    return true;
+                }
 
-            if (nonGenerated.contains(name)) {
-                return false;
-            }
+                if (nonGenerated.contains(name)) {
+                    return false;
+                }
 
-            if (classes.containsKey(name)) {
-                return false;
-            }
+                if (classes.containsKey(name)) {
+                    return false;
+                }
 
-            return findClass(name)
-                    .filter(Lookup::checkGenerated)
-                    .isPresent();
+                return findClass(name)
+                        .filter(Lookup::checkGenerated)
+                        .isPresent();
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
         }
-        return false;
     }
 
     public static boolean isGenerated(PsiClass cls) {
@@ -485,7 +490,11 @@ public class Lookup {
                         if (pair.getValue() instanceof PsiReferenceExpression exp) {
                             var value = exp.getReferenceName();
                             if (StringUtils.isNotBlank(value)) {
-                                builder.strategy(GenerationStrategy.valueOf(value));
+                                try {
+                                    builder.strategy(GenerationStrategy.valueOf(value));
+                                } catch (Exception e) {
+                                    //ignore
+                                }
                             }
                         }
                     }
@@ -614,8 +623,13 @@ public class Lookup {
         var result = new HashSet<Module>();
         var list = List.copyOf(classes.values());
         list.stream()
-                .filter(desc ->
-                        desc.cls.getContainingFile().getVirtualFile().equals(file))
+                .filter(desc -> {
+                    try {
+                        return desc.cls.getContainingFile().getVirtualFile().equals(file);
+                    } catch (Exception e) {
+                        return false;
+                    }
+                })
                 .forEach(desc -> {
                         if (nonNull(classes.remove(desc.cls.getQualifiedName()))) {
                             result.add(getModule(desc.cls));
