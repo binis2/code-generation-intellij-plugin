@@ -22,6 +22,7 @@ public class CodeGenBulkFileListener implements BulkFileListener {
                 .forEach(e ->
                         modules.addAll(Lookup.refreshCache(e.getFile())));
 
-        modules.forEach(Lookup::rebuildModule);
+        //TODO: Find a way to determine if the module is dirty
+        //modules.forEach(Lookup::rebuildModule);
     }
 }
