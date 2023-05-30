@@ -10,7 +10,8 @@ import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.*;
-import net.binis.codegen.annotation.type.GenerationStrategy;
+import com.intellij.psi.util.PsiTreeUtil;
+import net.binis.codegen.generation.core.interfaces.PrototypeData;
 import net.binis.intellij.tools.Lookup;
 import org.jetbrains.annotations.NotNull;
 
@@ -18,6 +19,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static java.util.Objects.nonNull;
+import static net.binis.codegen.annotation.type.GenerationStrategy.*;
+import static net.binis.codegen.tools.Tools.in;
 
 public class CodeGenAnnotator implements Annotator {
 
@@ -103,12 +106,13 @@ public class CodeGenAnnotator implements Annotator {
         try {
             if (!DumbService.isDumb(element.getProject())) {
                 if (element instanceof PsiClass cls) {
-                    if (Lookup.isPrototype(cls)) {
+                    var data = Lookup.getPrototypeData(cls);
+                    if (nonNull(data)) {
                         var intf = Lookup.getGeneratedName(cls);
                         var intfCls = Lookup.findClass(intf);
                         var ident = Lookup.findIdentifier(cls);
                         if (nonNull(ident)) {
-                            holder.newAnnotation(HighlightSeverity.INFORMATION, "test")
+                            holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
                                     .tooltip((intfCls.map(PsiElement::getContainingFile).isPresent() ? "Generated" : "Generates") + " <a href=\"#navigation/" + intfCls.map(psiClass -> (psiClass.getContainingFile().getVirtualFile().getCanonicalPath() + ":" + psiClass.getTextOffset())).orElse("unknown") + "\">" + intf + "</a>")
                                     .range(ident.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.CLASS_NAME).create();
                         }
@@ -137,7 +141,7 @@ public class CodeGenAnnotator implements Annotator {
                             var intf = Lookup.getGeneratedName(ref.getQualifiedName());
                             var intfCls = Lookup.findClass(intf);
                             if (intfCls.map(PsiElement::getContainingFile).isPresent()) {
-                                if (ref.getParent() instanceof PsiAnnotation || !GenerationStrategy.PROTOTYPE.equals(data.getStrategy())) {
+                                if (ref.getParent() instanceof PsiAnnotation || !PROTOTYPE.equals(data.getStrategy())) {
                                     holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
                                             .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.KEYWORD).create();
                                 } else {
@@ -149,9 +153,11 @@ public class CodeGenAnnotator implements Annotator {
                         } else {
                             data = Lookup.isPrototypeAnnotation(ref.getQualifiedName());
                             if (nonNull(data)) {
-                                holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                                        .tooltip("Generation strategy: " + data.getStrategy().name())
-                                        .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE).create();
+                                if (checkForErrors(data, element, ref, holder)) {
+                                    holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                                            .tooltip("Generation strategy: " + data.getStrategy().name())
+                                            .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE).create();
+                                }
                             }
                         }
                     }
@@ -170,6 +176,29 @@ public class CodeGenAnnotator implements Annotator {
         } catch (IndexNotReadyException e) {
             // ignore
         }
+    }
+
+    protected boolean checkForErrors(PrototypeData data, PsiElement element, PsiJavaCodeReferenceElement ref, AnnotationHolder holder) {
+
+        var result = true;
+
+        var cls = PsiTreeUtil.getParentOfType(element, PsiClass.class);
+        if (nonNull(cls)) {
+            if (!cls.isInterface() && in(data.getStrategy(), PROTOTYPE, IMPLEMENTATION, PLAIN)) {
+                holder.newAnnotation(HighlightSeverity.ERROR, "@" + ref.getText() + " is allowed only on interfaces!")
+                        .range(element.getTextRange()).create();
+                result = false;
+            }
+            if (in(data.getStrategy(), PROTOTYPE, PLAIN)) {
+                var intf = Lookup.getGeneratedName(cls);
+                if (intf.equals(cls.getQualifiedName())) {
+                    holder.newAnnotation(HighlightSeverity.ERROR, "Either rename class to '" + cls.getName() + "Prototype' or move it to a '*.prototypes.*' package!")
+                            .range(element.getTextRange()).create();
+                    result = false;
+                }
+            }
+        }
+        return result;
     }
 
 }

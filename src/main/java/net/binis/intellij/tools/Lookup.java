@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static java.util.Objects.nonNull;
 import static net.binis.codegen.generation.core.Structures.*;
+import static net.binis.codegen.tools.Tools.withRes;
 
 public class Lookup {
 
@@ -414,6 +415,7 @@ public class Lookup {
     }
 
     protected static void readAnnotation(PsiAnnotation ann, PrototypeDataHandler.PrototypeDataHandlerBuilder builder) {
+        builder.custom("prototype", ann.getQualifiedName());
         ann.getAttributes().forEach((node) -> {
             if (node instanceof PsiNameValuePair pair) {
                 switch (pair.getAttributeName()) {
@@ -643,7 +645,8 @@ public class Lookup {
     }
 
     public static Promise<ProjectTaskManager.Result> rebuildModule(Module module) {
-        return ProjectTaskManager.getInstance(module.getProject()).build(module);
+        return withRes(module.getProject(), project ->
+                ProjectTaskManager.getInstance(project).build(module));
     }
 
     private static PrototypeDataHandler.PrototypeDataHandlerBuilder copyData(PrototypeData data) {
