@@ -2,10 +2,9 @@ package net.binis.intellij.tools;
 
 import com.github.javaparser.ast.expr.Name;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.progress.ProcessCanceledException;
-import com.intellij.openapi.project.IndexNotReadyException;
-import com.intellij.openapi.project.Project;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -26,8 +25,10 @@ import org.jetbrains.concurrency.Promise;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 import static net.binis.codegen.generation.core.Structures.*;
+import static net.binis.codegen.tools.Tools.with;
 import static net.binis.codegen.tools.Tools.withRes;
 
 public class Lookup {
@@ -40,8 +41,17 @@ public class Lookup {
     private static final Set<String> processing = Collections.synchronizedSet(new HashSet<>());
     private static final Map<String, String> generated = new ConcurrentHashMap<>();
     private static final Set<String> nonGenerated = Collections.synchronizedSet(new HashSet<>());
-
+    private static final Map<String, ValidationDescription> validators = new ConcurrentHashMap<>();
     public static final Set<String> STARTERS = Set.of("create", "with", "find", "builder");
+    private static final Map<String, List<String>> knownTargetAwareClasses = Map.of(
+            "net.binis.codegen.validation.consts.ValidationTargets.Primitives", List.of(int.class.getCanonicalName(), long.class.getCanonicalName(), double.class.getCanonicalName(), float.class.getCanonicalName(), short.class.getCanonicalName(), byte.class.getCanonicalName(), boolean.class.getCanonicalName(), char.class.getCanonicalName()),
+            "net.binis.codegen.validation.consts.ValidationTargets.Wrappers", List.of(Integer.class.getCanonicalName(), Long.class.getCanonicalName(), Double.class.getCanonicalName(), Float.class.getCanonicalName(), Short.class.getCanonicalName(), Byte.class.getCanonicalName(), Boolean.class.getCanonicalName(), Character.class.getCanonicalName()),
+            "net.binis.codegen.validation.consts.ValidationTargets.Common", List.of(int.class.getCanonicalName(), long.class.getCanonicalName(), double.class.getCanonicalName(), float.class.getCanonicalName(), short.class.getCanonicalName(), byte.class.getCanonicalName(), boolean.class.getCanonicalName(), char.class.getCanonicalName(), Integer.class.getCanonicalName(), Long.class.getCanonicalName(), Double.class.getCanonicalName(), Float.class.getCanonicalName(), Short.class.getCanonicalName(), Byte.class.getCanonicalName(), Boolean.class.getCanonicalName(), Character.class.getCanonicalName(), String.class.getCanonicalName()),
+            "net.binis.codegen.validation.consts.ValidationTargets.WrapperNumbers", List.of(Integer.class.getCanonicalName(), Long.class.getCanonicalName(), Double.class.getCanonicalName(), Float.class.getCanonicalName(), Short.class.getCanonicalName(), Byte.class.getCanonicalName()),
+            "net.binis.codegen.validation.consts.ValidationTargets.PrimitiveNumbers", List.of(int.class.getCanonicalName(), long.class.getCanonicalName(), double.class.getCanonicalName(), float.class.getCanonicalName(), short.class.getCanonicalName(), byte.class.getCanonicalName()),
+            "net.binis.codegen.validation.consts.ValidationTargets.Numbers", List.of(int.class.getCanonicalName(), long.class.getCanonicalName(), double.class.getCanonicalName(), float.class.getCanonicalName(), short.class.getCanonicalName(), byte.class.getCanonicalName(), Integer.class.getCanonicalName(), Long.class.getCanonicalName(), Double.class.getCanonicalName(), Float.class.getCanonicalName(), Short.class.getCanonicalName(), Byte.class.getCanonicalName())
+    );
+
 
     public static final Map<Project, CodeGenProjectService> projects = new ConcurrentHashMap<>();
 
@@ -633,9 +643,9 @@ public class Lookup {
                     }
                 })
                 .forEach(desc -> {
-                        if (nonNull(classes.remove(desc.cls.getQualifiedName()))) {
-                            result.add(getModule(desc.cls));
-                        }
+                    if (nonNull(classes.remove(desc.cls.getQualifiedName()))) {
+                        result.add(getModule(desc.cls));
+                    }
                 });
         return result;
     }
@@ -667,6 +677,133 @@ public class Lookup {
                 .implementationPath(data.getImplementationPath());
     }
 
+    public static ValidationDescription isValidationAnnotation(String name) {
+        var data = validators.get(name);
+
+        if (isNull(data)) {
+            data = registerValidator(name);
+        }
+
+        return data.isValidationAnnotation() ? data : null;
+    }
+
+    public static ValidationDescription registerValidator(String name) {
+        if (validators.size() < 3) {
+            validators.compute("net.binis.codegen.annotation.validation.Validate", (k, v) ->
+                    ValidationDescription.builder()
+                            .cls(findClass(k).orElse(null))
+                            .validator(true)
+                            .targets(Collections.emptyList())
+                            .build());
+            validators.compute("net.binis.codegen.annotation.validation.Sanitize", (k, v) ->
+                    ValidationDescription.builder()
+                            .cls(findClass(k).orElse(null))
+                            .sanitizer(true)
+                            .targets(Collections.emptyList())
+                            .build());
+            validators.compute("net.binis.codegen.annotation.validation.Execute", (k, v) ->
+                    ValidationDescription.builder()
+                            .cls(findClass(k).orElse(null))
+                            .executor(true)
+                            .targets(Collections.emptyList())
+                            .build());
+        }
+
+        processing.add(name);
+        try {
+            var data = validators.get(name);
+            if (isNull(data)) {
+                var cls = findClass(name);
+                if (cls.isPresent() && cls.get().isAnnotationType()) {
+                    for (var ann : cls.get().getAnnotations()) {
+                        if (!processing.contains(ann.getQualifiedName())) {
+                            var d = validators.get(ann.getQualifiedName());
+                            if (isNull(d)) {
+                                d = registerValidator(ann.getQualifiedName());
+                            }
+                            if (d.isValidationAnnotation()) {
+                                var targets = d.getTargets();
+                                var methods = cls.get().findMethodsByName("targets", false);
+                                if (methods.length > 0) {
+                                    targets = processTargets(null);
+                                } else {
+                                    targets = withRes(processTargets(ann.findAttributeValue("targets")), value -> value, targets);
+                                }
+
+                                d = ValidationDescription.builder()
+                                        .cls(cls.get())
+                                        .validator(d.isValidator())
+                                        .sanitizer(d.isSanitizer())
+                                        .executor(d.isExecutor())
+                                        .targets(targets)
+                                        .build();
+                                validators.put(name, d);
+                                return d;
+                            }
+                        }
+                    }
+                }
+                data = ValidationDescription.builder().build();
+            }
+
+            return data;
+        } finally {
+            processing.remove(name);
+        }
+    }
+
+    public static ValidationDescription processTargets(PsiAnnotation annotation, ValidationDescription data) {
+        if (nonNull(data.cls)) {
+            var attr = annotation.findAttributeValue("targets");
+            if (nonNull(attr)) {
+                return ValidationDescription.builder()
+                        .cls(data.cls)
+                        .validator(data.validator)
+                        .sanitizer(data.sanitizer)
+                        .executor(data.executor)
+                        .targets(processTargets(attr))
+                        .build();
+            }
+        }
+        return data;
+    }
+
+    protected static List<String> processTargets(PsiAnnotationMemberValue attr) {
+        if (nonNull(attr)) {
+            if (attr instanceof PsiArrayInitializerMemberValue init) {
+                var result = new ArrayList<String>();
+                for (var i : init.getInitializers()) {
+                    if (i instanceof PsiClassObjectAccessExpression exp) {
+                        processTarget(result, exp.getOperand().getType().getCanonicalText());
+                    }
+                }
+                return result;
+            }
+            if (attr instanceof PsiClassObjectAccessExpression exp) {
+                var result = new ArrayList<String>();
+                processTarget(result, exp.getOperand().getType().getCanonicalText());
+                return result;
+            }
+        }
+
+        return null;
+    }
+
+    private static void processTarget(List<String> result, String name) {
+        findClass(name).ifPresentOrElse(cls -> {
+            Arrays.stream(cls.getImplementsListTypes())
+                    .filter(t -> "net.binis.codegen.validation.consts.ValidationTargets.TargetsAware".equals(t.getCanonicalText()))
+                    .findFirst()
+                    .ifPresentOrElse(t ->
+                            processTargetAware(result, name), () -> result.add(name));
+        }, () -> result.add(name));
+    }
+
+    private static void processTargetAware(List<String> result, String name) {
+        //TODO: Proper target aware handling
+        with(knownTargetAwareClasses.get(name), result::addAll);
+    }
+
     @Builder
     @Data
     public static class LookupDescription {
@@ -677,5 +814,20 @@ public class Lookup {
             return nonNull(prototype);
         }
     }
+
+    @Builder
+    @Data
+    public static class ValidationDescription {
+        private PsiClass cls;
+        private List<String> targets;
+        private boolean executor;
+        private boolean validator;
+        private boolean sanitizer;
+
+        public boolean isValidationAnnotation() {
+            return executor || validator || sanitizer;
+        }
+    }
+
 
 }

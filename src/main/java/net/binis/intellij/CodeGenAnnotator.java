@@ -18,9 +18,11 @@ import org.jetbrains.annotations.NotNull;
 import java.util.HashSet;
 import java.util.Set;
 
+import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 import static net.binis.codegen.annotation.type.GenerationStrategy.*;
 import static net.binis.codegen.tools.Tools.in;
+import static net.binis.codegen.tools.Tools.with;
 
 public class CodeGenAnnotator implements Annotator {
 
@@ -158,6 +160,11 @@ public class CodeGenAnnotator implements Annotator {
                                             .tooltip("Generation strategy: " + data.getStrategy().name())
                                             .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE).create();
                                 }
+                            } else if (nonNull(ref.getParent()) && ref.getParent() instanceof PsiAnnotation ann) {
+                                var valid = Lookup.isValidationAnnotation(ann.getQualifiedName());
+                                if (nonNull(valid) && valid.isValidationAnnotation()) {
+                                    checkForValidationErrors(valid, ref, ann, holder);
+                                }
                             }
                         }
                     }
@@ -176,6 +183,41 @@ public class CodeGenAnnotator implements Annotator {
         } catch (IndexNotReadyException e) {
             // ignore
         }
+    }
+
+    private void checkForValidationErrors(Lookup.ValidationDescription data, PsiJavaCodeReferenceElement element, PsiAnnotation annotation, AnnotationHolder holder) {
+        var cls = PsiTreeUtil.getParentOfType(element, PsiClass.class);
+        if (isNull(cls) || !cls.isInterface() || !Lookup.isPrototype(cls)) {
+            holder.newAnnotation(HighlightSeverity.WARNING, "Validation annotations are evaluated only on prototypes!")
+                    .range(element.getTextRange()).create();
+        }
+
+        var method = PsiTreeUtil.getParentOfType(element, PsiMethod.class);
+        if (isNull(method)) {
+            holder.newAnnotation(HighlightSeverity.WARNING, "Validation annotations are evaluated only on prototype methods!")
+                    .range(element.getTextRange()).create();
+        } else {
+            data = Lookup.processTargets(annotation, data);
+            if (nonNull(method.getReturnType())) {
+                var type = method.getReturnType().getCanonicalText();
+
+                with(data.getTargets(), targets -> {
+                    var valid = targets.isEmpty();
+                    for (var target : targets) {
+                        if (target.equals(type)) {
+                            valid = true;
+                            break;
+                        }
+                    }
+
+                    if (!valid) {
+                        holder.newAnnotation(HighlightSeverity.ERROR, "Target '" + type + "' is not in the list of allowed targets for '" + annotation.getNameReferenceElement().getText() + "': " + targets)
+                                .range(element.getTextRange()).create();
+                    }
+                });
+            }
+        }
+
     }
 
     protected boolean checkForErrors(PrototypeData data, PsiElement element, PsiJavaCodeReferenceElement ref, AnnotationHolder holder) {
