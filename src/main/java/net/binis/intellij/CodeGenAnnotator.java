@@ -15,14 +15,14 @@ import net.binis.codegen.generation.core.interfaces.PrototypeData;
 import net.binis.intellij.tools.Lookup;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 import static net.binis.codegen.annotation.type.GenerationStrategy.*;
-import static net.binis.codegen.tools.Tools.in;
-import static net.binis.codegen.tools.Tools.with;
+import static net.binis.codegen.tools.Tools.*;
 
 public class CodeGenAnnotator implements Annotator {
 
@@ -157,13 +157,21 @@ public class CodeGenAnnotator implements Annotator {
                             if (nonNull(data)) {
                                 if (checkForErrors(data, element, ref, holder)) {
                                     holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                                            .tooltip("Generation strategy: " + data.getStrategy().name())
+                                            .tooltip("Generation strategy: " + (Lookup.isEnum(data) ? "Enum" : data.getStrategy().name()))
                                             .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE).create();
                                 }
                             } else if (nonNull(ref.getParent()) && ref.getParent() instanceof PsiAnnotation ann) {
                                 var valid = Lookup.isValidationAnnotation(ann.getQualifiedName());
                                 if (nonNull(valid) && valid.isValidationAnnotation()) {
                                     checkForValidationErrors(valid, ref, ann, holder);
+                                }
+                            } else {
+                                var resolved = ref.resolve();
+                                if (resolved instanceof PsiField field && field.getParent() instanceof PsiClass cls && Lookup.isGenerated(cls.getQualifiedName())) {
+                                    with(Lookup.getPrototypeClass(cls.getQualifiedName()), proto ->
+                                            with(Lookup.getPrototypeData(proto), dta ->
+                                                    condition(Lookup.isEnum(dta), () ->
+                                                            calcEnumTooltip(element, field, holder, cls, proto, dta))));
                                 }
                             }
                         }
@@ -182,6 +190,42 @@ public class CodeGenAnnotator implements Annotator {
             }
         } catch (IndexNotReadyException e) {
             // ignore
+        }
+    }
+
+    protected void calcEnumTooltip(PsiElement element, PsiField field, AnnotationHolder holder, PsiClass cls, PsiClass proto, PrototypeData dta) {
+        try {
+            with(PsiTreeUtil.getChildOfType(PsiTreeUtil.getContextOfType(PsiTreeUtil.getChildOfType(field.getInitializer(), PsiReferenceExpression.class), PsiMethodCallExpression.class), PsiExpressionList.class), values -> {
+                var impl = Lookup.findClass(PsiTreeUtil.getChildOfType((PsiElement) cls.getAnnotation("net.binis.codegen.annotation.Default").getAttributes().get(0), PsiLiteralExpression.class).getValue().toString()).get();
+                var paramNames = impl.getConstructors()[0].getParameterList();
+                var expressions = values.getExpressions();
+
+                var tooltip = new StringBuilder();
+
+                tooltip.append("<b>Enum value:</b> <a href=\"#navigation/")
+                        .append(proto.getContainingFile().getVirtualFile().getCanonicalPath()).append(":")
+                        .append(Arrays.stream(proto.getFields()).filter(f -> f.getName().equals(field.getName())).findFirst().get().getTextOffset())
+                        .append("\">").append(((PsiLiteralExpression) expressions[1]).getValue().toString())
+                        .append("</a><br/>")
+                        .append("<b>Ordinal value:</b> ")
+                        .append(expressions[2].getText())
+                        .append("<br/>");
+
+                for (var i = 2; i < paramNames.getParametersCount(); i++) {
+                    tooltip.append("<b>")
+                            .append(paramNames.getParameters()[i].getName())
+                            .append(":</b> ")
+                            .append(expressions[i + 1].getText())
+                            .append("<br/>");
+                }
+
+                holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                        .tooltip(tooltip.toString())
+                        .range(element.getTextRange()).create();
+
+            });
+        } catch (Exception e) {
+            log.warn(e);
         }
     }
 
@@ -217,7 +261,6 @@ public class CodeGenAnnotator implements Annotator {
                 });
             }
         }
-
     }
 
     protected boolean checkForErrors(PrototypeData data, PsiElement element, PsiJavaCodeReferenceElement ref, AnnotationHolder holder) {
@@ -226,17 +269,25 @@ public class CodeGenAnnotator implements Annotator {
 
         var cls = PsiTreeUtil.getParentOfType(element, PsiClass.class);
         if (nonNull(cls)) {
-            if (!cls.isInterface() && in(data.getStrategy(), PROTOTYPE, IMPLEMENTATION, PLAIN)) {
-                holder.newAnnotation(HighlightSeverity.ERROR, "@" + ref.getText() + " is allowed only on interfaces!")
-                        .range(element.getTextRange()).create();
-                result = false;
-            }
-            if (in(data.getStrategy(), PROTOTYPE, PLAIN)) {
-                var intf = Lookup.getGeneratedName(cls);
-                if (intf.equals(cls.getQualifiedName())) {
-                    holder.newAnnotation(HighlightSeverity.ERROR, "Either rename class to '" + cls.getName() + "Prototype' or move it to a '*.prototypes.*' package!")
+            if (Lookup.isEnum(data)) {
+                if (!cls.isEnum()) {
+                    holder.newAnnotation(HighlightSeverity.ERROR, "@" + ref.getText() + " is allowed only on enums!")
                             .range(element.getTextRange()).create();
                     result = false;
+                }
+            } else {
+                if (!cls.isInterface() && in(data.getStrategy(), PROTOTYPE, IMPLEMENTATION, PLAIN)) {
+                    holder.newAnnotation(HighlightSeverity.ERROR, "@" + ref.getText() + " is allowed only on interfaces!")
+                            .range(element.getTextRange()).create();
+                    result = false;
+                }
+                if (in(data.getStrategy(), PROTOTYPE, PLAIN)) {
+                    var intf = Lookup.getGeneratedName(cls);
+                    if (intf.equals(cls.getQualifiedName())) {
+                        holder.newAnnotation(HighlightSeverity.ERROR, "Either rename class to '" + cls.getName() + "Prototype' or move it to a '*.prototypes.*' package!")
+                                .range(element.getTextRange()).create();
+                        result = false;
+                    }
                 }
             }
         }

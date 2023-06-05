@@ -15,6 +15,7 @@ import com.intellij.task.ProjectTaskManager;
 import lombok.Builder;
 import lombok.Data;
 import net.binis.codegen.annotation.CodePrototypeTemplate;
+import net.binis.codegen.annotation.EnumPrototype;
 import net.binis.codegen.annotation.type.GenerationStrategy;
 import net.binis.codegen.discovery.Discoverer;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
@@ -554,6 +555,10 @@ public class Lookup {
         defaultProperties.put(template.getQualifiedName(), () -> {
             var builder = defaultBuilder();
 
+            if (EnumPrototype.class.getCanonicalName().equals(template.getQualifiedName())) {
+                builder.custom("enum", true);
+            }
+
             Arrays.stream(template.getAnnotations())
                     .filter(a -> defaultProperties.containsKey(a.getQualifiedName()))
                     .forEach(a -> readAnnotation(a, builder));
@@ -660,7 +665,7 @@ public class Lookup {
     }
 
     private static PrototypeDataHandler.PrototypeDataHandlerBuilder copyData(PrototypeData data) {
-        return PrototypeDataHandler.builder()
+        var result = PrototypeDataHandler.builder()
                 .base(data.isBase())
                 .name(data.getName())
                 .generateConstructor(data.isGenerateConstructor())
@@ -675,6 +680,8 @@ public class Lookup {
                 .basePath(data.getBasePath())
                 .interfacePath(data.getInterfacePath())
                 .implementationPath(data.getImplementationPath());
+        data.getCustom().forEach(result::custom);
+        return result;
     }
 
     public static ValidationDescription isValidationAnnotation(String name) {
@@ -685,6 +692,10 @@ public class Lookup {
         }
 
         return data.isValidationAnnotation() ? data : null;
+    }
+
+    public static boolean isEnum(PrototypeData data) {
+        return withRes(data.getCustom().get("enum"), value -> (Boolean) value, false);
     }
 
     public static ValidationDescription registerValidator(String name) {
@@ -789,7 +800,7 @@ public class Lookup {
         return null;
     }
 
-    private static void processTarget(List<String> result, String name) {
+    protected static void processTarget(List<String> result, String name) {
         findClass(name).ifPresentOrElse(cls -> {
             Arrays.stream(cls.getImplementsListTypes())
                     .filter(t -> "net.binis.codegen.validation.consts.ValidationTargets.TargetsAware".equals(t.getCanonicalText()))
@@ -799,7 +810,7 @@ public class Lookup {
         }, () -> result.add(name));
     }
 
-    private static void processTargetAware(List<String> result, String name) {
+    protected static void processTargetAware(List<String> result, String name) {
         //TODO: Proper target aware handling
         with(knownTargetAwareClasses.get(name), result::addAll);
     }
