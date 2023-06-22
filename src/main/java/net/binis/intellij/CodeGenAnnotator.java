@@ -268,7 +268,7 @@ public class CodeGenAnnotator implements Annotator {
         var result = true;
 
         var cls = PsiTreeUtil.getParentOfType(element, PsiClass.class);
-        if (nonNull(cls)) {
+        if (nonNull(cls) && isNull(PsiTreeUtil.getParentOfType(element, PsiClassObjectAccessExpression.class))) {
             if (Lookup.isEnum(data)) {
                 if (!cls.isEnum()) {
                     holder.newAnnotation(HighlightSeverity.ERROR, "@" + ref.getText() + " is allowed only on enums!")

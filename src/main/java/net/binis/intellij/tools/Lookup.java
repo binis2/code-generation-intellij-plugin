@@ -37,7 +37,7 @@ public class Lookup {
     private static final Logger log = Logger.getInstance(Lookup.class);
 
     private static final Map<String, LookupDescription> classes = new ConcurrentHashMap<>();
-    private static final Map<String, PrototypeData> protoypes = new ConcurrentHashMap<>();
+    private static final Map<String, PrototypeData> prototypes = new ConcurrentHashMap<>();
     private static final Set<String> nonTemplates = Collections.synchronizedSet(new HashSet<>());
     private static final Set<String> processing = Collections.synchronizedSet(new HashSet<>());
     private static final Map<String, String> generated = new ConcurrentHashMap<>();
@@ -241,7 +241,7 @@ public class Lookup {
 
     public static PrototypeData isPrototypeAnnotation(String name) {
         if (nonNull(name)) {
-            var result = protoypes.get(name);
+            var result = prototypes.get(name);
 
             if (nonNull(result)) {
                 return result;
@@ -280,18 +280,24 @@ public class Lookup {
                                 if (file.isPresent() && file.get() instanceof PsiPlainTextFile text) {
                                     Discoverer.findAnnotations(text.getText()).stream()
                                             .filter(d -> d.getType().equals(Discoverer.TEMPLATE))
-                                            .filter(d -> !protoypes.containsKey(d.getName()))
+                                            .filter(d -> !prototypes.containsKey(d.getName()))
                                             .forEach(service ->
                                                     Lookup.processPrototype(service.getName()));
-                                    var result = protoypes.get(name);
+                                    var result = prototypes.get(name);
                                     if (nonNull(result)) {
                                         return result;
+                                    } else {
+                                        checkForNonRegisteredTemplates(cls.get());
+                                        result = prototypes.get(name);
+                                        if (nonNull(result)) {
+                                            return result;
+                                        }
                                     }
                                 }
                             }
                         } else {
                             if (Lookup.processPrototype(name)) {
-                                var result = protoypes.get(name);
+                                var result = prototypes.get(name);
                                 if (nonNull(result)) {
                                     return result;
                                 }
@@ -311,11 +317,26 @@ public class Lookup {
         return null;
     }
 
+    protected static void checkForNonRegisteredTemplates(PsiClass cls) {
+        for (var ann : cls.getAnnotations()) {
+            var name = ann.getQualifiedName();
+            if (!prototypes.containsKey(name) && !nonTemplates.contains(name)) {
+                findClass(ann.getQualifiedName()).ifPresent(Lookup::checkForNonRegisteredTemplates);
+            }
+
+            if (prototypes.containsKey(name)) {
+                name = cls.getQualifiedName();
+                registerTemplate(cls);
+                prototypes.put(name, defaultProperties.get(name).get().build());
+            }
+        }
+    }
+
     protected static boolean processPrototype(String name) {
         var clas = findClass(name);
         if (clas.isPresent()) {
             if ("net.binis.codegen.annotation.CodePrototype".equals(name) || "net.binis.codegen.annotation.EnumPrototype".equals(name)) {
-                return nonNull(protoypes.computeIfAbsent(name, k -> {
+                return nonNull(prototypes.computeIfAbsent(name, k -> {
                     registerTemplate(clas.get());
                     return defaultProperties.get(k).get().build();
                 }));
@@ -326,7 +347,7 @@ public class Lookup {
                             .filter(a -> !nonTemplates.contains(a.getQualifiedName()))
                             .forEach(a -> discoverAnnotation(a.getQualifiedName()));
                     registerTemplate(clas.get());
-                    protoypes.put(name, defaultProperties.get(name).get().build());
+                    prototypes.put(name, defaultProperties.get(name).get().build());
                 } else {
                     nonTemplates.add(name);
                 }
@@ -427,7 +448,7 @@ public class Lookup {
 
     protected static void readAnnotation(PsiAnnotation ann, PrototypeDataHandler.PrototypeDataHandlerBuilder builder) {
         builder.custom("prototype", ann.getQualifiedName());
-        ann.getAttributes().forEach((node) -> {
+        ann.getAttributes().forEach(node -> {
             if (node instanceof PsiNameValuePair pair) {
                 switch (pair.getAttributeName()) {
                     case "name" -> {
@@ -695,7 +716,7 @@ public class Lookup {
     }
 
     public static boolean isEnum(PrototypeData data) {
-        return withRes(data.getCustom().get("enum"), value -> (Boolean) value, false);
+        return withRes(data.getCustom().get("enum"), Boolean.class::cast, false);
     }
 
     public static ValidationDescription registerValidator(String name) {
@@ -801,13 +822,12 @@ public class Lookup {
     }
 
     protected static void processTarget(List<String> result, String name) {
-        findClass(name).ifPresentOrElse(cls -> {
+        findClass(name).ifPresentOrElse(cls ->
             Arrays.stream(cls.getImplementsListTypes())
                     .filter(t -> "net.binis.codegen.validation.consts.ValidationTargets.TargetsAware".equals(t.getCanonicalText()))
                     .findFirst()
                     .ifPresentOrElse(t ->
-                            processTargetAware(result, name), () -> result.add(name));
-        }, () -> result.add(name));
+                            processTargetAware(result, name), () -> result.add(name)), () -> result.add(name));
     }
 
     protected static void processTargetAware(List<String> result, String name) {
