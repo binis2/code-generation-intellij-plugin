@@ -296,13 +296,10 @@ public class Lookup {
                                 }
                             }
                         } else {
-                            if (Lookup.processPrototype(name)) {
-                                var result = prototypes.get(name);
-                                if (nonNull(result)) {
-                                    return result;
-                                }
-                            } else {
-                                return null;
+                            checkForNonRegisteredTemplates(cls.get());
+                            var result = prototypes.get(name);
+                            if (nonNull(result)) {
+                                return result;
                             }
                         }
                     }
@@ -320,14 +317,28 @@ public class Lookup {
     protected static void checkForNonRegisteredTemplates(PsiClass cls) {
         for (var ann : cls.getAnnotations()) {
             var name = ann.getQualifiedName();
-            if (!prototypes.containsKey(name) && !nonTemplates.contains(name)) {
-                findClass(ann.getQualifiedName()).ifPresent(Lookup::checkForNonRegisteredTemplates);
-            }
+            if (CodePrototypeTemplate.class.getCanonicalName().equals(name)) {
+                prototypes.computeIfAbsent(cls.getQualifiedName(), k -> {
+                    registerTemplate(cls);
+                    return defaultProperties.get(k).get().build();
+                });
+            } else if (!nonTemplates.contains(name)) {
+                if (!prototypes.containsKey(name) && !processing.contains(name)) {
+                    try {
+                        processing.add(name);
+                        findClass(name).ifPresent(Lookup::checkForNonRegisteredTemplates);
+                    } finally {
+                        processing.remove(name);
+                    }
+                }
 
-            if (prototypes.containsKey(name)) {
-                name = cls.getQualifiedName();
-                registerTemplate(cls);
-                prototypes.put(name, defaultProperties.get(name).get().build());
+                if (prototypes.containsKey(name)) {
+                    name = cls.getQualifiedName();
+                    registerTemplate(cls);
+                    prototypes.put(name, defaultProperties.get(name).get().build());
+                } else {
+                    nonTemplates.add(name);
+                }
             }
         }
     }
@@ -823,11 +834,11 @@ public class Lookup {
 
     protected static void processTarget(List<String> result, String name) {
         findClass(name).ifPresentOrElse(cls ->
-            Arrays.stream(cls.getImplementsListTypes())
-                    .filter(t -> "net.binis.codegen.validation.consts.ValidationTargets.TargetsAware".equals(t.getCanonicalText()))
-                    .findFirst()
-                    .ifPresentOrElse(t ->
-                            processTargetAware(result, name), () -> result.add(name)), () -> result.add(name));
+                Arrays.stream(cls.getImplementsListTypes())
+                        .filter(t -> "net.binis.codegen.validation.consts.ValidationTargets.TargetsAware".equals(t.getCanonicalText()))
+                        .findFirst()
+                        .ifPresentOrElse(t ->
+                                processTargetAware(result, name), () -> result.add(name)), () -> result.add(name));
     }
 
     protected static void processTargetAware(List<String> result, String name) {

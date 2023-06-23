@@ -144,8 +144,11 @@ public class CodeGenAnnotator implements Annotator {
                             var intfCls = Lookup.findClass(intf);
                             if (intfCls.map(PsiElement::getContainingFile).isPresent()) {
                                 if (ref.getParent() instanceof PsiAnnotation || !PROTOTYPE.equals(data.getStrategy())) {
-                                    holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                                            .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.KEYWORD).create();
+                                    if (checkForErrors(data, element, ref, holder)) {
+                                        holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                                                .tooltip("Generation strategy: " + (Lookup.isEnum(data) ? "Enum" : data.getStrategy().name()))
+                                                .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE).create();
+                                    }
                                 } else {
                                     holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
                                             .tooltip("Generates <a href=\"#navigation/" + intfCls.map(psiClass -> (psiClass.getContainingFile().getVirtualFile().getCanonicalPath() + ":" + psiClass.getTextOffset())).orElse("unknown") + "\">" + intf + "</a>")
