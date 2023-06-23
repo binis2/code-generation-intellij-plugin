@@ -1,6 +1,7 @@
 package net.binis.intellij.usages;
 
 import com.intellij.codeInsight.daemon.ImplicitUsageProvider;
+import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiMethod;
@@ -29,12 +30,15 @@ public class CodeGenImplicitUsageProvider implements ImplicitUsageProvider {
     }
 
     protected boolean isUsage(PsiElement element) {
-        if (element instanceof PsiClass cls) {
-            return Lookup.isPrototype(cls);
+        try {
+            if (element instanceof PsiClass cls) {
+                return Lookup.isPrototype(cls);
+            }
+
+            return Lookup.isPrototype(PsiTreeUtil.getParentOfType(element, PsiClass.class));
+        } catch (IndexNotReadyException e) {
+            return false;
         }
-
-        return Lookup.isPrototype(PsiTreeUtil.getParentOfType(element, PsiClass.class));
-
     }
 
 }
