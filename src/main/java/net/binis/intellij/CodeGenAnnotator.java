@@ -234,15 +234,17 @@ public class CodeGenAnnotator implements Annotator {
 
     private void checkForValidationErrors(Lookup.ValidationDescription data, PsiJavaCodeReferenceElement element, PsiAnnotation annotation, AnnotationHolder holder) {
         var cls = PsiTreeUtil.getParentOfType(element, PsiClass.class);
-        if (isNull(cls) || !cls.isInterface() || !Lookup.isPrototype(cls)) {
+        if (isNull(cls) || !cls.isInterface() || (!Lookup.isPrototype(cls) && !cls.isAnnotationType())) {
             holder.newAnnotation(HighlightSeverity.WARNING, "Validation annotations are evaluated only on prototypes!")
                     .range(element.getTextRange()).create();
         }
 
         var method = PsiTreeUtil.getParentOfType(element, PsiMethod.class);
         if (isNull(method)) {
-            holder.newAnnotation(HighlightSeverity.WARNING, "Validation annotations are evaluated only on prototype methods!")
-                    .range(element.getTextRange()).create();
+            if (!cls.isAnnotationType()) {
+                holder.newAnnotation(HighlightSeverity.WARNING, "Validation annotations are evaluated only on prototype methods!")
+                        .range(element.getTextRange()).create();
+            }
         } else {
             data = Lookup.processTargets(annotation, data);
             if (nonNull(method.getReturnType())) {
