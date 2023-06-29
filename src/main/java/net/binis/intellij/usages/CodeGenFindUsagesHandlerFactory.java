@@ -3,6 +3,7 @@ package net.binis.intellij.usages;
 import com.intellij.find.findUsages.FindUsagesHandler;
 import com.intellij.find.findUsages.FindUsagesHandlerFactory;
 import com.intellij.openapi.project.DumbService;
+import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiMethod;
@@ -21,12 +22,16 @@ public class CodeGenFindUsagesHandlerFactory extends FindUsagesHandlerFactory {
 
     @Override
     public boolean canFindUsages(@NotNull PsiElement element) {
-        if (!DumbService.isDumb(element.getProject())) {
-            if (element instanceof PsiClass cls && (Lookup.isPrototype(cls) || Lookup.isGenerated(cls))) {
-                return true;
-            }
+        try {
+            if (!DumbService.isDumb(element.getProject())) {
+                if (element instanceof PsiClass cls && (Lookup.isPrototype(cls) || Lookup.isGenerated(cls))) {
+                    return true;
+                }
 
-            return element instanceof PsiMethod field && field.getParent() instanceof PsiClass cls && cls.isInterface() && (Lookup.isPrototype(cls) || Lookup.isGenerated(cls));
+                return element instanceof PsiMethod field && field.getParent() instanceof PsiClass cls && cls.isInterface() && (Lookup.isPrototype(cls) || Lookup.isGenerated(cls));
+            }
+        } catch (IndexNotReadyException e) {
+            //Ignore
         }
         return false;
     }
