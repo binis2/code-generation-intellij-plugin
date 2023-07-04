@@ -1,6 +1,5 @@
 package net.binis.intellij;
 
-import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.patterns.PlatformPatterns;
