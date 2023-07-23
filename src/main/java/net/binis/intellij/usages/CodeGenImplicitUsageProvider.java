@@ -4,7 +4,6 @@ import com.intellij.codeInsight.daemon.ImplicitUsageProvider;
 import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiMethod;
 import com.intellij.psi.util.PsiTreeUtil;
 import net.binis.intellij.tools.Lookup;
 import org.jetbrains.annotations.NotNull;

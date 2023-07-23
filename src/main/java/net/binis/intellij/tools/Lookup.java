@@ -680,7 +680,7 @@ public class Lookup {
                     }
                 })
                 .forEach(desc -> {
-                    if (nonNull(classes.remove(desc.cls.getQualifiedName()))) {
+                    if (nonNull(withRes(desc.cls.getQualifiedName(), classes::remove))) {
                         result.add(getModule(desc.cls));
                     }
                 });
