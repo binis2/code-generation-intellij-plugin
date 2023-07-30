@@ -56,6 +56,9 @@
         <!--        <applicationService-->
         <!--                serviceImplementation="net.binis.intellij.services.CodeGenApplicationService"/>-->
         <projectService serviceImplementation="net.binis.intellij.services.CodeGenProjectService"/>
+        <daemon.highlightInfoFilter implementation="net.binis.intellij.filter.CodeGenHighlightErrorFilter"/>
+<!--        <lang.structureViewExtension implementation="net.binis.intellij.extension.CodeGenStructureViewExtension"/>-->
+        <lang.psiAugmentProvider implementation="net.binis.intellij.provider.CodeGenAugmentProvider"/>
     </extensions>
     <applicationListeners>
         <listener class="net.binis.intellij.listeners.CodeGenManagerListener"
