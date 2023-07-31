@@ -463,8 +463,7 @@ public class Lookup {
             if (node instanceof PsiNameValuePair pair) {
                 switch (pair.getAttributeName()) {
                     case "name" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            var value = (String) exp.getValue();
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof String value) {
                             if (StringUtils.isNotBlank(value)) {
                                 var intf = value.replace("Entity", "");
                                 builder.name(value).className(value).interfaceName(intf).longModifierName(intf + ".Modify");
@@ -472,43 +471,43 @@ public class Lookup {
                         }
                     }
                     case "generateConstructor" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            builder.generateConstructor((Boolean) exp.getValue());
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof Boolean value) {
+                            builder.generateConstructor(value);
                         }
                     }
                     case "generateImplementation" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            builder.generateImplementation((Boolean) exp.getValue());
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof Boolean value) {
+                            builder.generateImplementation(value);
                         }
                     }
                     case "generateInterface" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            builder.generateInterface((Boolean) exp.getValue());
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof Boolean value) {
+                            builder.generateInterface(value);
                         }
                     }
                     case "interfaceName" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            builder.interfaceName((String) exp.getValue());
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof String value) {
+                            builder.interfaceName(value);
                         }
                     }
                     case "classGetters" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            builder.classGetters((Boolean) exp.getValue());
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof Boolean value) {
+                            builder.classGetters(value);
                         }
                     }
                     case "classSetters" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            builder.classSetters((Boolean) exp.getValue());
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof Boolean value) {
+                            builder.classSetters(value);
                         }
                     }
                     case "interfaceSetters" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            builder.interfaceSetters((Boolean) exp.getValue());
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof Boolean value) {
+                            builder.interfaceSetters((Boolean) value);
                         }
                     }
                     case "base" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            builder.base((Boolean) exp.getValue());
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof Boolean value) {
+                            builder.base(value);
                         }
                     }
 //                    case "baseModifierClass":
@@ -524,8 +523,7 @@ public class Lookup {
 //                        }
 //                        break;
                     case "implementationPackage" -> {
-                        if (pair.getValue() instanceof PsiLiteralExpression exp) {
-                            var value = (String) exp.getValue();
+                        if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof String value) {
                             if (StringUtils.isNotBlank(value)) {
                                 builder.classPackage(value);
                             }
@@ -544,24 +542,21 @@ public class Lookup {
                         }
                     }
                     case "basePath" -> {
-                        if (pair.getAttributeValue() instanceof PsiLiteralExpression exp) {
-                            var value = (String) exp.getValue();
+                        if (pair.getAttributeValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof String value) {
                             if (StringUtils.isNotBlank(value)) {
                                 builder.basePath(value);
                             }
                         }
                     }
                     case "interfacePath" -> {
-                        if (pair.getAttributeValue() instanceof PsiLiteralExpression exp) {
-                            var value = (String) exp.getValue();
+                        if (pair.getAttributeValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof String value) {
                             if (StringUtils.isNotBlank(value)) {
                                 builder.interfacePath(value);
                             }
                         }
                     }
                     case "implementationPath" -> {
-                        if (pair.getAttributeValue() instanceof PsiLiteralExpression exp) {
-                            var value = (String) exp.getValue();
+                        if (pair.getAttributeValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof String value) {
                             if (StringUtils.isNotBlank(value)) {
                                 builder.implementationPath(value);
                             }
