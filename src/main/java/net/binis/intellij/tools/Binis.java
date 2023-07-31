@@ -8,4 +8,14 @@ public class Binis {
         return true;
     }
 
+    public static boolean isAnnotationInheritanceEnabled(Project project) {
+        return isPluginEnabled(project);
+    }
+
+    public static boolean isBracketlessMethodsEnabled(Project project) {
+        return isPluginEnabled(project);
+    }
+
+
+
 }
