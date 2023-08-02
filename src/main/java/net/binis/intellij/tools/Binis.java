@@ -13,7 +13,7 @@ public class Binis {
     }
 
     public static boolean isBracketlessMethodsEnabled(Project project) {
-        return isPluginEnabled(project);
+        return false;
     }
 
 
