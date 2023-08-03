@@ -13,6 +13,7 @@ import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
 import net.binis.intellij.tools.Lookup;
+import net.binis.intellij.util.PrototypeUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
@@ -281,12 +282,14 @@ public class CodeGenAnnotator implements Annotator {
                     result = false;
                 }
             } else {
-                if (!cls.isInterface() && in(data.getStrategy(), PROTOTYPE, IMPLEMENTATION, PLAIN)) {
+                var strategy = nullCheck(PrototypeUtil.readPrototypeStrategy(element), data.getStrategy());
+
+                if (!cls.isInterface() && in(strategy, PROTOTYPE, IMPLEMENTATION, PLAIN)) {
                     holder.newAnnotation(HighlightSeverity.ERROR, "@" + ref.getText() + " is allowed only on interfaces!")
                             .range(element.getTextRange()).create();
                     result = false;
                 }
-                if (in(data.getStrategy(), PROTOTYPE, PLAIN)) {
+                if (in(strategy, PROTOTYPE, PLAIN)) {
                     var intf = Lookup.getGeneratedName(cls);
                     if (intf.equals(cls.getQualifiedName())) {
                         holder.newAnnotation(HighlightSeverity.ERROR, "Either rename class to '" + cls.getName() + "Prototype' or move it to a '*.prototypes.*' package!")

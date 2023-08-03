@@ -18,8 +18,10 @@ import net.binis.codegen.annotation.CodePrototypeTemplate;
 import net.binis.codegen.annotation.EnumPrototype;
 import net.binis.codegen.annotation.type.GenerationStrategy;
 import net.binis.codegen.discovery.Discoverer;
+import net.binis.codegen.generation.core.Structures;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
 import net.binis.intellij.services.CodeGenProjectService;
+import net.binis.intellij.util.PrototypeUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.concurrency.Promise;
 
@@ -29,8 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 import static net.binis.codegen.generation.core.Structures.*;
-import static net.binis.codegen.tools.Tools.with;
-import static net.binis.codegen.tools.Tools.withRes;
+import static net.binis.codegen.tools.Tools.*;
 
 public class Lookup {
 
@@ -529,18 +530,8 @@ public class Lookup {
                             }
                         }
                     }
-                    case "strategy" -> {
-                        if (pair.getValue() instanceof PsiReferenceExpression exp) {
-                            var value = exp.getReferenceName();
-                            if (StringUtils.isNotBlank(value)) {
-                                try {
-                                    builder.strategy(GenerationStrategy.valueOf(value));
-                                } catch (Exception e) {
-                                    //ignore
-                                }
-                            }
-                        }
-                    }
+                    case "strategy" ->
+                        nullCheck(PrototypeUtil.readPrototypeStrategy(pair.getValue()), builder::strategy);
                     case "basePath" -> {
                         if (pair.getAttributeValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof String value) {
                             if (StringUtils.isNotBlank(value)) {
@@ -562,12 +553,10 @@ public class Lookup {
                             }
                         }
                     }
-//                    case "enrichers":
-//                        builder.predefinedEnrichers((List)handleClassExpression(pair.getValue(), List.class));
-//                        break;
-//                    case "inheritedEnrichers":
-//                        builder.predefinedInheritedEnrichers((List)handleClassExpression(pair.getValue(), List.class));
-//                        break;
+                    case "enrichers" ->
+                            handleEnrichers(builder, pair);
+                    case "inheritedEnrichers" ->
+                            handleInheritedEnrichers(builder, pair);
 //                    case "options":
 //                        builder.options((Set)handleClassExpression(pair.getValue(), Set.class));
                     default -> builder.custom(pair.getAttributeName(), pair.getAttributeValue());
@@ -576,6 +565,14 @@ public class Lookup {
                 builder.custom("value", node);
             }
         });
+    }
+
+    protected static void handleInheritedEnrichers(PrototypeDataHandler.PrototypeDataHandlerBuilder builder, PsiNameValuePair pair) {
+
+    }
+
+    protected static void handleEnrichers(PrototypeDataHandler.PrototypeDataHandlerBuilder builder, PsiNameValuePair pair) {
+
     }
 
     public static void registerTemplate(PsiClass template) {
