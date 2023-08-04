@@ -1,5 +1,6 @@
 package net.binis.intellij.util;
 
+import com.intellij.lang.jvm.annotation.JvmAnnotationEnumFieldValue;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiAnnotationMemberValue;
 import com.intellij.psi.PsiElement;
@@ -13,18 +14,7 @@ import static java.util.Objects.nonNull;
 public class PrototypeUtil {
 
     public static GenerationStrategy readPrototypeStrategy(PsiAnnotationMemberValue memberValue) {
-        if (memberValue instanceof PsiReferenceExpression exp) {
-            var value = exp.getReferenceName();
-            if (StringUtils.isNotBlank(value)) {
-                try {
-                    return GenerationStrategy.valueOf(value);
-                } catch (Exception e) {
-                    //ignore
-                }
-            }
-        }
-
-        return null;
+        return readAnnotationEnumValue(memberValue, GenerationStrategy.class);
     }
 
     public static GenerationStrategy readPrototypeStrategy(PsiElement element) {
@@ -37,5 +27,27 @@ public class PrototypeUtil {
         }
         return null;
     }
+
+    public static <T extends Enum<T>> T readAnnotationEnumValue(Object memberValue, Class<T> type) {
+        if (memberValue instanceof PsiReferenceExpression exp) {
+            var value = exp.getReferenceName();
+            if (StringUtils.isNotBlank(value)) {
+                try {
+                    return Enum.valueOf(type, value);
+                } catch (Exception e) {
+                    //ignore
+                }
+            }
+        } else if (memberValue instanceof JvmAnnotationEnumFieldValue value) {
+            try {
+                return Enum.valueOf(type, value.getField().getName());
+            } catch (Exception e) {
+                //ignore
+            }
+        }
+
+        return null;
+    }
+
 
 }

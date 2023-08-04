@@ -1,6 +1,7 @@
 package net.binis.intellij.tools;
 
 import com.github.javaparser.ast.expr.Name;
+import com.intellij.lang.jvm.annotation.JvmAnnotationConstantValue;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.progress.ProcessCanceledException;
@@ -9,6 +10,7 @@ import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
+import com.intellij.psi.impl.source.PsiImmediateClassType;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.task.ProjectTaskManager;
@@ -16,11 +18,15 @@ import lombok.Builder;
 import lombok.Data;
 import net.binis.codegen.annotation.CodePrototypeTemplate;
 import net.binis.codegen.annotation.EnumPrototype;
+import net.binis.codegen.annotation.augment.AugmentTargetType;
+import net.binis.codegen.annotation.augment.AugmentTargetTypeSeverity;
+import net.binis.codegen.annotation.augment.AugmentType;
+import net.binis.codegen.annotation.augment.CodeAugment;
 import net.binis.codegen.annotation.type.GenerationStrategy;
 import net.binis.codegen.discovery.Discoverer;
-import net.binis.codegen.generation.core.Structures;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
 import net.binis.intellij.services.CodeGenProjectService;
+import net.binis.intellij.tools.objects.EnricherData;
 import net.binis.intellij.util.PrototypeUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.concurrency.Promise;
@@ -531,7 +537,7 @@ public class Lookup {
                         }
                     }
                     case "strategy" ->
-                        nullCheck(PrototypeUtil.readPrototypeStrategy(pair.getValue()), builder::strategy);
+                            nullCheck(PrototypeUtil.readPrototypeStrategy(pair.getValue()), builder::strategy);
                     case "basePath" -> {
                         if (pair.getAttributeValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof String value) {
                             if (StringUtils.isNotBlank(value)) {
@@ -553,10 +559,8 @@ public class Lookup {
                             }
                         }
                     }
-                    case "enrichers" ->
-                            handleEnrichers(builder, pair);
-                    case "inheritedEnrichers" ->
-                            handleInheritedEnrichers(builder, pair);
+                    case "enrichers" -> handleEnrichers(builder, pair);
+                    case "inheritedEnrichers" -> handleInheritedEnrichers(builder, pair);
 //                    case "options":
 //                        builder.options((Set)handleClassExpression(pair.getValue(), Set.class));
                     default -> builder.custom(pair.getAttributeName(), pair.getAttributeValue());
@@ -568,11 +572,53 @@ public class Lookup {
     }
 
     protected static void handleInheritedEnrichers(PrototypeDataHandler.PrototypeDataHandlerBuilder builder, PsiNameValuePair pair) {
-
+        with(handleEnrichersPair(pair), list -> builder.custom("inheritedEnrichers", list));
     }
 
     protected static void handleEnrichers(PrototypeDataHandler.PrototypeDataHandlerBuilder builder, PsiNameValuePair pair) {
+        with(handleEnrichersPair(pair), list -> builder.custom("enrichers", list));
+    }
 
+    protected static List<EnricherData> handleEnrichersPair(PsiNameValuePair pair) {
+        var result = new ArrayList<EnricherData>();
+        if (pair.getValue() instanceof PsiClassObjectAccessExpression exp && exp.getType() instanceof PsiImmediateClassType type) {
+            findClass(exp.getOperand().getType().getCanonicalText())
+                    .ifPresent(cls -> result.add(buildEnricherData(cls)));
+        }
+        return result;
+    }
+
+    protected static EnricherData buildEnricherData(PsiClass cls) {
+        var result = EnricherData.builder().cls(cls);
+        var ann = cls.getAnnotation(CodeAugment.class.getCanonicalName());
+        if (nonNull(ann)) {
+            ann.getAttributes().forEach(attr -> {
+                switch (attr.getAttributeName()) {
+                    case "adds" ->
+                            result.adds(PrototypeUtil.readAnnotationEnumValue(attr.getAttributeValue(), AugmentType.class));
+                    case "targets" ->
+                            result.targets(nullCheck(PrototypeUtil.readAnnotationEnumValue(attr.getAttributeValue(), AugmentTargetType.class), AugmentTargetType.EVERYTHING));
+                    case "severity" ->
+                            result.severity(nullCheck(PrototypeUtil.readAnnotationEnumValue(attr.getAttributeValue(), AugmentTargetTypeSeverity.class), AugmentTargetTypeSeverity.ERROR));
+                    case "name" -> {
+                        if (attr.getAttributeValue() instanceof JvmAnnotationConstantValue exp && exp.getConstantValue() instanceof String value && StringUtils.isNotBlank(value)) {
+                            result.name(value);
+                        }
+                    }
+                    case "type" -> {
+                        if (attr.getAttributeValue() instanceof JvmAnnotationConstantValue exp && exp.getConstantValue() instanceof String value && StringUtils.isNotBlank(value)) {
+                            result.type(value);
+                        }
+                    }
+                    case "modifier" -> {
+                        if (attr.getAttributeValue() instanceof JvmAnnotationConstantValue exp && exp.getConstantValue() instanceof Long value) {
+                            result.modifier(value);
+                        }
+                    }
+                }
+            });
+        }
+        return result.build();
     }
 
     public static void registerTemplate(PsiClass template) {
