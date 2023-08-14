@@ -42,7 +42,7 @@ import static net.binis.codegen.tools.Tools.*;
 public class Lookup {
 
     private static final Logger log = Logger.getInstance(Lookup.class);
-
+    private static final ThreadLocal<Boolean> registering = ThreadLocal.withInitial(() -> false);
     private static final Map<String, LookupDescription> classes = new ConcurrentHashMap<>();
     private static final Map<String, PrototypeData> prototypes = new ConcurrentHashMap<>();
     private static final Set<String> nonTemplates = Collections.synchronizedSet(new HashSet<>());
@@ -63,7 +63,11 @@ public class Lookup {
 
     public static final Map<Project, CodeGenProjectService> projects = new ConcurrentHashMap<>();
 
-    public static void registerClass(PsiClass cls) {
+    public static boolean isRegistering() {
+        return registering.get();
+    }
+
+    public static synchronized void registerClass(PsiClass cls) {
         try {
             if (nonNull(cls.getQualifiedName())) {
                 classes.put(cls.getQualifiedName(), LookupDescription.builder()
@@ -622,64 +626,59 @@ public class Lookup {
     }
 
     public static void registerTemplate(PsiClass template) {
-        defaultProperties.put(template.getQualifiedName(), () -> {
-            var builder = defaultBuilder();
+        registering.set(true);
+        try {
+            defaultProperties.put(template.getQualifiedName(), () -> {
+                var builder = defaultBuilder();
 
-            if (EnumPrototype.class.getCanonicalName().equals(template.getQualifiedName())) {
-                builder.custom("enum", true);
-            }
+                if (EnumPrototype.class.getCanonicalName().equals(template.getQualifiedName())) {
+                    builder.custom("enum", true);
+                }
 
-            Arrays.stream(template.getAnnotations())
-                    .filter(a -> defaultProperties.containsKey(a.getQualifiedName()))
-                    .forEach(a -> readAnnotation(a, builder));
+                Arrays.stream(template.getAnnotations())
+                        .filter(a -> defaultProperties.containsKey(a.getQualifiedName()))
+                        .forEach(a -> readAnnotation(a, builder));
 
-            Arrays.stream(template.getMethods())
-                    .filter(PsiAnnotationMethod.class::isInstance)
-                    .map(PsiAnnotationMethod.class::cast)
-                    .filter(m -> nonNull(m.getDefaultValue()))
-                    .forEach(method -> {
-                        switch (method.getName()) {
-                            case "base" -> builder.base(handleBooleanExpression(method.getDefaultValue()));
-                            case "name" -> builder.name(handleStringExpression(method.getDefaultValue()));
-                            case "generateConstructor" ->
-                                    builder.generateConstructor(handleBooleanExpression(method.getDefaultValue()));
+                Arrays.stream(template.getMethods())
+                        .filter(PsiAnnotationMethod.class::isInstance)
+                        .map(PsiAnnotationMethod.class::cast)
+                        .filter(m -> nonNull(m.getDefaultValue()))
+                        .forEach(method -> {
+                            switch (method.getName()) {
+                                case "base" -> builder.base(handleBooleanExpression(method.getDefaultValue()));
+                                case "name" -> builder.name(handleStringExpression(method.getDefaultValue()));
+                                case "generateConstructor" -> builder.generateConstructor(handleBooleanExpression(method.getDefaultValue()));
 //                            case "options" ->
 //                                    builder.options(handleClassExpression(method.getDefaultValue().get(), Set.class));
-                            case "interfaceName" ->
-                                    builder.interfaceName(handleStringExpression(method.getDefaultValue()));
-                            case "implementationPath" ->
-                                    builder.implementationPath(handleStringExpression(method.getDefaultValue()));
-//                            case "enrichers" ->
-//                                    builder.predefinedEnrichers(handleClassExpression(method.getDefaultValue().get(), List.class));
-//                            case "inheritedEnrichers" ->
-//                                    builder.predefinedInheritedEnrichers(handleClassExpression(method.getDefaultValue().get(), List.class));
-                            case "interfaceSetters" ->
-                                    builder.interfaceSetters(handleBooleanExpression(method.getDefaultValue()));
-                            case "classGetters" ->
-                                    builder.classGetters(handleBooleanExpression(method.getDefaultValue()));
-                            case "classSetters" ->
-                                    builder.classSetters(handleBooleanExpression(method.getDefaultValue()));
+                                case "interfaceName" -> builder.interfaceName(handleStringExpression(method.getDefaultValue()));
+                                case "implementationPath" -> builder.implementationPath(handleStringExpression(method.getDefaultValue()));
+                                case "enrichers" -> {
+                                }//handleEnrichers(builder, method.getDefaultValue());
+                                case "inheritedEnrichers" -> {
+                                }//handleInheritedEnrichers(builder, method.getDefaultValue());
+                                //builder.predefinedInheritedEnrichers(handleClassExpression(method.getDefaultValue().get(), List.class));
+                                case "interfaceSetters" -> builder.interfaceSetters(handleBooleanExpression(method.getDefaultValue()));
+                                case "classGetters" -> builder.classGetters(handleBooleanExpression(method.getDefaultValue()));
+                                case "classSetters" -> builder.classSetters(handleBooleanExpression(method.getDefaultValue()));
 //                            case "baseModifierClass" ->
 //                                    builder.baseModifierClass(handleClassExpression(method.getDefaultValue().get()));
 //                            case "mixInClass" ->
 //                                    builder.mixInClass(handleClassExpression(method.getDefaultValue().get()));
-                            case "interfacePath" ->
-                                    builder.interfacePath(handleStringExpression(method.getDefaultValue()));
-                            case "generateInterface" ->
-                                    builder.generateInterface(handleBooleanExpression(method.getDefaultValue()));
-                            case "basePath" -> builder.basePath(handleStringExpression(method.getDefaultValue()));
-                            case "generateImplementation" ->
-                                    builder.generateImplementation(handleBooleanExpression(method.getDefaultValue()));
-                            case "implementationPackage" ->
-                                    builder.classPackage(handleStringExpression(method.getDefaultValue()));
-                            case "strategy" ->
-                                    builder.strategy(handleEnumExpression(method.getDefaultValue(), GenerationStrategy.class));
-                            default -> builder.custom(method.getName(), method.getDefaultValue());
-                        }
-                    });
+                                case "interfacePath" -> builder.interfacePath(handleStringExpression(method.getDefaultValue()));
+                                case "generateInterface" -> builder.generateInterface(handleBooleanExpression(method.getDefaultValue()));
+                                case "basePath" -> builder.basePath(handleStringExpression(method.getDefaultValue()));
+                                case "generateImplementation" -> builder.generateImplementation(handleBooleanExpression(method.getDefaultValue()));
+                                case "implementationPackage" -> builder.classPackage(handleStringExpression(method.getDefaultValue()));
+                                case "strategy" -> builder.strategy(handleEnumExpression(method.getDefaultValue(), GenerationStrategy.class));
+                                default -> builder.custom(method.getName(), method.getDefaultValue());
+                            }
+                        });
 
-            return builder;
-        });
+                return builder;
+            });
+        } finally {
+            registering.set(false);
+        }
     }
 
     protected static boolean handleBooleanExpression(PsiAnnotationMemberValue value) {
@@ -750,7 +749,7 @@ public class Lookup {
                 .basePath(data.getBasePath())
                 .interfacePath(data.getInterfacePath())
                 .implementationPath(data.getImplementationPath());
-        data.getCustom().forEach(result::custom);
+        with(data.getCustom(), custom -> custom.forEach(result::custom));
         return result;
     }
 
@@ -765,7 +764,7 @@ public class Lookup {
     }
 
     public static boolean isEnum(PrototypeData data) {
-        return withRes(data.getCustom().get("enum"), Boolean.class::cast, false);
+        return withRes(data.getCustom(), custom -> withRes(custom.get("enum"), Boolean.class::cast, false), false);
     }
 
     public static ValidationDescription registerValidator(String name) {

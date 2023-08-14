@@ -1,6 +1,7 @@
 package net.binis.intellij.provider;
 
 import com.intellij.lang.java.JavaLanguage;
+import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.util.Key;
 import com.intellij.psi.*;
 import com.intellij.psi.augment.PsiAugmentProvider;
@@ -42,60 +43,66 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                                                           @NotNull final Class<Psi> type,
                                                           @Nullable String nameHint) {
         List<PsiElement> result = new ArrayList<>();
-        if (element instanceof PsiClass cls && cls.getLanguage().isKindOf(JavaLanguage.INSTANCE)) {
-            if (cls.isAnnotationType()) {
-                if (PsiMethod.class.equals(type) && notNull(cls.getExtendsList()) && Binis.isAnnotationInheritanceEnabled(element.getProject())) {
-                    List<PsiMethod> methods = (List) result;
-                    var list = cls.getExtendsList().getReferencedTypes();
-                    if (list.length > 0) {
-                        Arrays.stream(list)
-                                .map(PsiClassType::resolve)
-                                .filter(Objects::nonNull)
-                                .forEach(t ->
-                                        Arrays.stream(t.getAllMethods())
-                                                .filter(PsiAnnotationMethodImpl.class::isInstance)
-                                                .filter(m -> isNull(m.getUserData(AUGMENTED)))
-                                                .filter(m -> methods.stream().noneMatch(a ->
-                                                        a.getName().equals(m.getName())))
-                                                //TODO: Use LightMethodBuilder
-                                                .map(PsiElement::copy)
-                                                .map(PsiMethod.class::cast)
-                                                .forEach(m -> {
-                                                    m.putUserData(AUGMENTED, m.getName());
-                                                    methods.add(m);
-                                                }));
-                        cls.putUserData(AUGMENTED, cls.getQualifiedName());
-                    }
-                }
-            } else {
-                if (PsiField.class.equals(type) && Binis.isBracketlessMethodsEnabled(element.getProject())) {
-                    var augmenting = _augmenting.get();
-                    if (!"_Dummy_".equals(cls.getQualifiedName()) && (isNull(augmenting) || !augmenting.contains(cls))) {
-                        if (isNull(augmenting)) {
-                            augmenting = new HashSet<>();
-                            _augmenting.set(augmenting);
+        if (!Lookup.isRegistering()) {
+            try {
+                if (element instanceof PsiClass cls && cls.getLanguage().isKindOf(JavaLanguage.INSTANCE)) {
+                    if (cls.isAnnotationType()) {
+                        if (PsiMethod.class.equals(type) && notNull(cls.getExtendsList()) && Binis.isAnnotationInheritanceEnabled(element.getProject())) {
+                            List<PsiMethod> methods = (List) result;
+                            var list = cls.getExtendsList().getReferencedTypes();
+                            if (list.length > 0) {
+                                Arrays.stream(list)
+                                        .map(PsiClassType::resolve)
+                                        .filter(Objects::nonNull)
+                                        .forEach(t ->
+                                                Arrays.stream(t.getAllMethods())
+                                                        .filter(PsiAnnotationMethodImpl.class::isInstance)
+                                                        .filter(m -> isNull(m.getUserData(AUGMENTED)))
+                                                        .filter(m -> methods.stream().noneMatch(a ->
+                                                                a.getName().equals(m.getName())))
+                                                        //TODO: Use LightMethodBuilder
+                                                        .map(PsiElement::copy)
+                                                        .map(PsiMethod.class::cast)
+                                                        .forEach(m -> {
+                                                            m.putUserData(AUGMENTED, m.getName());
+                                                            methods.add(m);
+                                                        }));
+                                cls.putUserData(AUGMENTED, cls.getQualifiedName());
+                            }
                         }
-                        augmenting.add(cls);
-                        try {
-                            Arrays.stream(cls.getAllMethods())
-                                    .filter(m -> !m.hasParameters())
-                                    .filter(m -> nonNull(m.getReturnType()))
-                                    .map(this::createField)
-                                    .forEach(m -> {
-                                        m.putUserData(AUGMENTED, m.getName());
-                                        result.add(m);
-                                    });
-                            cls.putUserData(AUGMENTED, cls.getQualifiedName());
-                        } finally {
-                            augmenting.remove(cls);
-                            if (augmenting.isEmpty()) {
-                                _augmenting.remove();
+                    } else {
+                        if (PsiField.class.equals(type) && Binis.isBracketlessMethodsEnabled(element.getProject())) {
+                            var augmenting = _augmenting.get();
+                            if (!"_Dummy_".equals(cls.getQualifiedName()) && (isNull(augmenting) || !augmenting.contains(cls))) {
+                                if (isNull(augmenting)) {
+                                    augmenting = new HashSet<>();
+                                    _augmenting.set(augmenting);
+                                }
+                                augmenting.add(cls);
+                                try {
+                                    Arrays.stream(cls.getAllMethods())
+                                            .filter(m -> !m.hasParameters())
+                                            .filter(m -> nonNull(m.getReturnType()))
+                                            .map(this::createField)
+                                            .forEach(m -> {
+                                                m.putUserData(AUGMENTED, m.getName());
+                                                result.add(m);
+                                            });
+                                    cls.putUserData(AUGMENTED, cls.getQualifiedName());
+                                } finally {
+                                    augmenting.remove(cls);
+                                    if (augmenting.isEmpty()) {
+                                        _augmenting.remove();
+                                    }
+                                }
                             }
                         }
                     }
+                    checkForAnnotationAugments(result, cls, type);
                 }
+            } catch (IndexNotReadyException e) {
+                //Do nothing
             }
-            checkForAnnotationAugments(result, cls, type);
         }
 
         return (List) result;
@@ -106,6 +113,7 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
         with(Lookup.getPrototypeData(cls), proto ->
                 with((List<EnricherData>) proto.getCustom().get("enrichers"), list ->
                     list.stream()
+                            .filter(data -> nonNull(data.getAdds()))
                             .filter(data -> filterByType(data, type))
                             .forEach(data -> {
                                 switch (data.getAdds()) {
