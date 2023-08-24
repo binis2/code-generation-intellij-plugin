@@ -6,6 +6,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.psi.*;
 import com.intellij.psi.augment.PsiAugmentProvider;
 import com.intellij.psi.impl.light.LightFieldBuilder;
+import com.intellij.psi.impl.light.LightMethodBuilder;
 import com.intellij.psi.impl.light.LightModifierList;
 import com.intellij.psi.impl.source.PsiAnnotationMethodImpl;
 import net.binis.intellij.tools.Binis;
@@ -43,7 +44,7 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                                                           @NotNull final Class<Psi> type,
                                                           @Nullable String nameHint) {
         List<PsiElement> result = new ArrayList<>();
-        if (!Lookup.isRegistering()) {
+        if (!Lookup.getRegisteringTemplate()) {
             try {
                 if (element instanceof PsiClass cls && cls.getLanguage().isKindOf(JavaLanguage.INSTANCE)) {
                     if (cls.isAnnotationType()) {
@@ -128,7 +129,9 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                                         //Not implemented
                                     }
                                     case CONSTRUCTOR -> {
-                                        //Not implemented
+                                        var constructor = createMethod(cls, data, true);
+                                        constructor.putUserData(AUGMENTED, constructor.getName());
+                                        result.add(constructor);
                                     }
                                 }
                             })
@@ -136,11 +139,23 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                 ));
     }
 
+    private PsiMethod createMethod(PsiClass cls, EnricherData data, boolean constructor) {
+        var builder = new LightMethodBuilder(cls.getManager(), JavaLanguage.INSTANCE, cls.getName());
+        builder.setConstructor(constructor);
+        builder.setContainingClass(cls);
+        builder.setNavigationElement(cls);
+        var list = new LightModifierList(cls.getManager());
+        handleModifiers(list, data.getModifier());
+        if (nonNull(data.getFilter())) {
+            data.getFilter().apply(cls).forEach(builder::addParameter);
+        }
+        return builder;
+    }
+
     private boolean filterByType(EnricherData data, Class<? extends PsiElement> type) {
         return switch (data.getAdds()) {
             case FIELD -> PsiField.class.isAssignableFrom(type);
-            case METHOD -> PsiMethod.class.isAssignableFrom(type) && !PsiMethod.class.cast(type).isConstructor();
-            case CONSTRUCTOR -> PsiMethod.class.isAssignableFrom(type) && PsiMethod.class.cast(type).isConstructor();
+            case METHOD, CONSTRUCTOR -> PsiMethod.class.isAssignableFrom(type);
             default -> false;
         };
     }

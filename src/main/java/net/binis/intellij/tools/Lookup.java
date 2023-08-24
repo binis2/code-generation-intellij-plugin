@@ -2,6 +2,7 @@ package net.binis.intellij.tools;
 
 import com.github.javaparser.ast.expr.Name;
 import com.intellij.lang.jvm.annotation.JvmAnnotationConstantValue;
+import com.intellij.lang.jvm.annotation.JvmNestedAnnotationValue;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.progress.ProcessCanceledException;
@@ -10,6 +11,9 @@ import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
+import com.intellij.psi.impl.light.LightParameter;
+import com.intellij.psi.impl.light.LightParameterListBuilder;
+import com.intellij.psi.impl.source.PsiExtensibleClass;
 import com.intellij.psi.impl.source.PsiImmediateClassType;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.PsiTreeUtil;
@@ -25,14 +29,21 @@ import net.binis.codegen.annotation.augment.CodeAugment;
 import net.binis.codegen.annotation.type.GenerationStrategy;
 import net.binis.codegen.discovery.Discoverer;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
+import net.binis.codegen.tools.Holder;
+import net.binis.codegen.tools.Interpolator;
+import net.binis.intellij.objects.CodeGenLightParameter;
 import net.binis.intellij.services.CodeGenProjectService;
 import net.binis.intellij.tools.objects.EnricherData;
 import net.binis.intellij.util.PrototypeUtil;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.concurrency.Promise;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
@@ -42,7 +53,8 @@ import static net.binis.codegen.tools.Tools.*;
 public class Lookup {
 
     private static final Logger log = Logger.getInstance(Lookup.class);
-    private static final ThreadLocal<Boolean> registering = ThreadLocal.withInitial(() -> false);
+    private static final ThreadLocal<Boolean> registeringTemplate = ThreadLocal.withInitial(() -> false);
+    private static final ThreadLocal<Boolean> registeringClass = ThreadLocal.withInitial(() -> false);
     private static final Map<String, LookupDescription> classes = new ConcurrentHashMap<>();
     private static final Map<String, PrototypeData> prototypes = new ConcurrentHashMap<>();
     private static final Set<String> nonTemplates = Collections.synchronizedSet(new HashSet<>());
@@ -63,32 +75,37 @@ public class Lookup {
 
     public static final Map<Project, CodeGenProjectService> projects = new ConcurrentHashMap<>();
 
-    public static boolean isRegistering() {
-        return registering.get();
+    public static boolean getRegisteringTemplate() {
+        return registeringTemplate.get() || registeringClass.get();
     }
 
     public static synchronized void registerClass(PsiClass cls) {
         try {
             if (nonNull(cls.getQualifiedName())) {
-                classes.put(cls.getQualifiedName(), LookupDescription.builder()
-                        .cls(cls)
-                        .prototype(Arrays.stream(cls.getAnnotations())
-                                .map(a -> {
-                                    var data = isPrototypeAnnotation(a);
-                                    if (nonNull(data)) {
-                                        var builder = copyData(data);
-                                        readAnnotation(a, builder);
-                                        return Optional.of(builder.build());
-                                    } else {
-                                        return Optional.<PrototypeData>empty();
-                                    }
-                                })
-                                .filter(Optional::isPresent)
-                                .map(Optional::get)
-                                .findFirst()
-                                .orElse(null))
-                        .build());
-                checkGenerated(cls);
+                registeringClass.set(true);
+                try {
+                    classes.put(cls.getQualifiedName(), LookupDescription.builder()
+                            .cls(cls)
+                            .prototype(Arrays.stream(cls.getAnnotations())
+                                    .map(a -> {
+                                        var data = isPrototypeAnnotation(a);
+                                        if (nonNull(data)) {
+                                            var builder = copyData(data);
+                                            readAnnotation(a, builder);
+                                            return Optional.of(builder.build());
+                                        } else {
+                                            return Optional.<PrototypeData>empty();
+                                        }
+                                    })
+                                    .filter(Optional::isPresent)
+                                    .map(Optional::get)
+                                    .findFirst()
+                                    .orElse(null))
+                            .build());
+                    checkGenerated(cls);
+                } finally {
+                    registeringClass.set(false);
+                }
             }
         } catch (ProcessCanceledException e) {
             throw e;
@@ -576,20 +593,37 @@ public class Lookup {
     }
 
     protected static void handleInheritedEnrichers(PrototypeDataHandler.PrototypeDataHandlerBuilder builder, PsiNameValuePair pair) {
-        with(handleEnrichersPair(pair), list -> builder.custom("inheritedEnrichers", list));
+        with(handleEnrichersValue(pair.getValue()), list -> builder.custom("inheritedEnrichers", list));
+    }
+
+    protected static void handleInheritedEnrichers(PrototypeDataHandler.PrototypeDataHandlerBuilder builder, PsiAnnotationMemberValue value) {
+        with(handleEnrichersValue(value), list -> builder.custom("inheritedEnrichers", list));
     }
 
     protected static void handleEnrichers(PrototypeDataHandler.PrototypeDataHandlerBuilder builder, PsiNameValuePair pair) {
-        with(handleEnrichersPair(pair), list -> builder.custom("enrichers", list));
+        with(handleEnrichersValue(pair.getValue()), list -> builder.custom("enrichers", list));
     }
 
-    protected static List<EnricherData> handleEnrichersPair(PsiNameValuePair pair) {
+    protected static void handleEnrichers(PrototypeDataHandler.PrototypeDataHandlerBuilder builder, PsiAnnotationMemberValue value) {
+        with(handleEnrichersValue(value), list -> builder.custom("enrichers", list));
+    }
+
+
+    protected static List<EnricherData> handleEnrichersValue(PsiAnnotationMemberValue value) {
         var result = new ArrayList<EnricherData>();
-        if (pair.getValue() instanceof PsiClassObjectAccessExpression exp && exp.getType() instanceof PsiImmediateClassType type) {
-            findClass(exp.getOperand().getType().getCanonicalText())
-                    .ifPresent(cls -> result.add(buildEnricherData(cls)));
-        }
+        handleEnrichersValue(result, value);
         return result;
+    }
+
+    protected static void handleEnrichersValue(List<EnricherData> list, PsiAnnotationMemberValue value) {
+        if (value instanceof PsiClassObjectAccessExpression exp && exp.getType() instanceof PsiImmediateClassType) {
+            findClass(exp.getOperand().getType().getCanonicalText())
+                    .ifPresent(cls -> list.add(buildEnricherData(cls)));
+        } else if (value instanceof PsiArrayInitializerMemberValue exp) {
+            for (var val : exp.getInitializers()) {
+                handleEnrichersValue(list, val);
+            }
+        }
     }
 
     protected static EnricherData buildEnricherData(PsiClass cls) {
@@ -619,14 +653,125 @@ public class Lookup {
                             result.modifier(value);
                         }
                     }
+                    case "parameters" -> {
+                        if (attr.getAttributeValue() instanceof JvmNestedAnnotationValue value) {
+                            with(value.getValue(), params ->
+                                    params.getAttributes().forEach(parAttr -> {
+                                        switch (parAttr.getAttributeName()) {
+                                            case "filter":
+                                                with(parAttr.getAttributeValue(), v -> {
+                                                    if (v instanceof JvmAnnotationConstantValue val) {
+                                                        with(val.getConstantValue(), c ->
+                                                                result.filter(buildFilter(c.toString())));
+                                                    }
+                                                });
+                                                break;
+                                            case "suppresses":
+                                                with(parAttr.getAttributeValue(), v -> {
+                                                    if (v instanceof JvmAnnotationConstantValue val) {
+                                                        with(val.getConstantValue(), c ->
+                                                                result.paramsSuppresses(Interpolator.build(c.toString())));
+                                                    }
+                                                });
+                                                break;
+                                            default:
+                                        }
+                                    }));
+                        }
+                    }
                 }
             });
         }
         return result.build();
     }
 
+    @SuppressWarnings("unchecked")
+    protected static Function<PsiClass, Stream<PsiParameter>> buildFilter(String filter) {
+        var segments = filter.split("\\|");
+        Function<PsiClass, Stream<CodeGenLightParameter>> elements = switch (segments[0]) {
+            case "FIELDS" -> (PsiClass cls) ->
+                    Arrays.stream(cls.getFields()).map(f ->
+                            new CodeGenLightParameter(f.getName(), f.getType(), f.getParent(), f.getModifierList(), f.hasInitializer()));
+            case "METHODS" -> (PsiClass cls) ->
+                    Arrays.stream(cls.getMethods()).map(m ->
+                            new CodeGenLightParameter(m.getName(), m.getReturnType(), m.getParent(), m.getModifierList(), false));
+            default -> null;
+        };
+
+        if (nonNull(elements)) {
+            var filters = new ArrayList<UnaryOperator<Stream<CodeGenLightParameter>>>();
+            for (var i = 1; i < segments.length; i++) {
+                if (nonNull(segments[i])) {
+                    switch (segments[i]) {
+                        case "PUBLIC" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.PUBLIC))));
+                        case "PRIVATE" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.PRIVATE))));
+                        case "PROTECTED" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.PROTECTED))));
+                        case "STATIC" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.STATIC))));
+                        case "FINAL" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.FINAL))));
+                        case "ABSTRACT" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.ABSTRACT))));
+                        case "TRANSIENT" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.TRANSIENT))));
+                        case "VOLATILE" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.VOLATILE))));
+                        case "SYNCHRONIZED" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.SYNCHRONIZED))));
+                        case "NATIVE" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.NATIVE))));
+                        case "STRICTFP" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.STRICTFP))));
+                        case "DEFAULT" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> list.hasExplicitModifier(PsiModifier.DEFAULT))));
+                        case "INITIALIZED" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(CodeGenLightParameter::isInitializer));
+                        case "!PUBLIC" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.PUBLIC))));
+                        case "!PRIVATE" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.PRIVATE))));
+                        case "!PROTECTED" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.PROTECTED))));
+                        case "!STATIC" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.STATIC))));
+                        case "!FINAL" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.FINAL))));
+                        case "!ABSTRACT" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.ABSTRACT))));
+                        case "!TRANSIENT" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.TRANSIENT))));
+                        case "!VOLATILE" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.VOLATILE))));
+                        case "!SYNCHRONIZED" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.SYNCHRONIZED))));
+                        case "!NATIVE" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.NATIVE))));
+                        case "!STRICTFP" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.STRICTFP))));
+                        case "!DEFAULT" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> withRes(m.getOrgModifierList(), list -> !list.hasExplicitModifier(PsiModifier.DEFAULT))));
+                        case "!INITIALIZED" ->
+                                filters.add((Stream<CodeGenLightParameter> stream) -> stream.filter(m -> !m.isInitializer()));
+                    }
+                }
+            }
+            return (PsiClass c) -> {
+                var result = elements.apply(c);
+                for (var f : filters) {
+                    result = f.apply(result);
+                }
+                return (Stream) result;
+            };
+        }
+
+        return null;
+    }
+
     public static void registerTemplate(PsiClass template) {
-        registering.set(true);
+        registeringTemplate.set(true);
         try {
             defaultProperties.put(template.getQualifiedName(), () -> {
                 var builder = defaultBuilder();
@@ -639,37 +784,47 @@ public class Lookup {
                         .filter(a -> defaultProperties.containsKey(a.getQualifiedName()))
                         .forEach(a -> readAnnotation(a, builder));
 
-                Arrays.stream(template.getMethods())
-                        .filter(PsiAnnotationMethod.class::isInstance)
+                var methods = template instanceof PsiExtensibleClass ext ? ext.getOwnMethods().stream() : Arrays.stream(template.getMethods());
+
+                methods.filter(PsiAnnotationMethod.class::isInstance)
                         .map(PsiAnnotationMethod.class::cast)
                         .filter(m -> nonNull(m.getDefaultValue()))
                         .forEach(method -> {
                             switch (method.getName()) {
                                 case "base" -> builder.base(handleBooleanExpression(method.getDefaultValue()));
                                 case "name" -> builder.name(handleStringExpression(method.getDefaultValue()));
-                                case "generateConstructor" -> builder.generateConstructor(handleBooleanExpression(method.getDefaultValue()));
+                                case "generateConstructor" ->
+                                        builder.generateConstructor(handleBooleanExpression(method.getDefaultValue()));
 //                            case "options" ->
 //                                    builder.options(handleClassExpression(method.getDefaultValue().get(), Set.class));
-                                case "interfaceName" -> builder.interfaceName(handleStringExpression(method.getDefaultValue()));
-                                case "implementationPath" -> builder.implementationPath(handleStringExpression(method.getDefaultValue()));
-                                case "enrichers" -> {
-                                }//handleEnrichers(builder, method.getDefaultValue());
-                                case "inheritedEnrichers" -> {
-                                }//handleInheritedEnrichers(builder, method.getDefaultValue());
-                                //builder.predefinedInheritedEnrichers(handleClassExpression(method.getDefaultValue().get(), List.class));
-                                case "interfaceSetters" -> builder.interfaceSetters(handleBooleanExpression(method.getDefaultValue()));
-                                case "classGetters" -> builder.classGetters(handleBooleanExpression(method.getDefaultValue()));
-                                case "classSetters" -> builder.classSetters(handleBooleanExpression(method.getDefaultValue()));
+                                case "interfaceName" ->
+                                        builder.interfaceName(handleStringExpression(method.getDefaultValue()));
+                                case "implementationPath" ->
+                                        builder.implementationPath(handleStringExpression(method.getDefaultValue()));
+                                case "enrichers" -> handleEnrichers(builder, method.getDefaultValue());
+                                case "inheritedEnrichers" ->
+                                        handleInheritedEnrichers(builder, method.getDefaultValue());
+                                case "interfaceSetters" ->
+                                        builder.interfaceSetters(handleBooleanExpression(method.getDefaultValue()));
+                                case "classGetters" ->
+                                        builder.classGetters(handleBooleanExpression(method.getDefaultValue()));
+                                case "classSetters" ->
+                                        builder.classSetters(handleBooleanExpression(method.getDefaultValue()));
 //                            case "baseModifierClass" ->
 //                                    builder.baseModifierClass(handleClassExpression(method.getDefaultValue().get()));
 //                            case "mixInClass" ->
 //                                    builder.mixInClass(handleClassExpression(method.getDefaultValue().get()));
-                                case "interfacePath" -> builder.interfacePath(handleStringExpression(method.getDefaultValue()));
-                                case "generateInterface" -> builder.generateInterface(handleBooleanExpression(method.getDefaultValue()));
+                                case "interfacePath" ->
+                                        builder.interfacePath(handleStringExpression(method.getDefaultValue()));
+                                case "generateInterface" ->
+                                        builder.generateInterface(handleBooleanExpression(method.getDefaultValue()));
                                 case "basePath" -> builder.basePath(handleStringExpression(method.getDefaultValue()));
-                                case "generateImplementation" -> builder.generateImplementation(handleBooleanExpression(method.getDefaultValue()));
-                                case "implementationPackage" -> builder.classPackage(handleStringExpression(method.getDefaultValue()));
-                                case "strategy" -> builder.strategy(handleEnumExpression(method.getDefaultValue(), GenerationStrategy.class));
+                                case "generateImplementation" ->
+                                        builder.generateImplementation(handleBooleanExpression(method.getDefaultValue()));
+                                case "implementationPackage" ->
+                                        builder.classPackage(handleStringExpression(method.getDefaultValue()));
+                                case "strategy" ->
+                                        builder.strategy(handleEnumExpression(method.getDefaultValue(), GenerationStrategy.class));
                                 default -> builder.custom(method.getName(), method.getDefaultValue());
                             }
                         });
@@ -677,7 +832,7 @@ public class Lookup {
                 return builder;
             });
         } finally {
-            registering.set(false);
+            registeringTemplate.set(false);
         }
     }
 
