@@ -12,6 +12,7 @@ import com.intellij.psi.impl.source.PsiAnnotationMethodImpl;
 import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
 import net.binis.intellij.tools.objects.EnricherData;
+import net.binis.intellij.util.CodeGenDependenciesUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -30,12 +31,6 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
 
     protected static final ThreadLocal<Set<PsiElement>> _augmenting = new ThreadLocal<>();
 
-    @NotNull
-    @Override
-    public <Psi extends PsiElement> List<Psi> getAugments(@NotNull PsiElement element,
-                                                          @NotNull final Class<Psi> type) {
-        return getAugments(element, type, null);
-    }
 
     @SuppressWarnings("unchecked")
     @NotNull
@@ -44,8 +39,8 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                                                           @NotNull final Class<Psi> type,
                                                           @Nullable String nameHint) {
         List<PsiElement> result = new ArrayList<>();
-        if (!Lookup.getRegisteringTemplate()) {
-            try {
+        try {
+            if (Binis.isCodeGenUsed(element) && !Lookup.getRegisteringTemplate()) {
                 if (element instanceof PsiClass cls && cls.getLanguage().isKindOf(JavaLanguage.INSTANCE)) {
                     if (cls.isAnnotationType()) {
                         if (PsiMethod.class.equals(type) && notNull(cls.getExtendsList()) && Binis.isAnnotationInheritanceEnabled(element.getProject())) {
@@ -101,45 +96,44 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                     }
                     checkForAnnotationAugments(result, cls, type);
                 }
-            } catch (IndexNotReadyException e) {
-                //Do nothing
             }
+        } catch (IndexNotReadyException e) {
+            //Do nothing
         }
-
         return (List) result;
     }
 
     @SuppressWarnings("unchecked")
-    private void checkForAnnotationAugments(List<PsiElement> result, PsiClass cls, Class<? extends PsiElement> type) {
+    protected void checkForAnnotationAugments(List<PsiElement> result, PsiClass cls, Class<? extends PsiElement> type) {
         with(Lookup.getPrototypeData(cls), proto ->
                 with((List<EnricherData>) proto.getCustom().get("enrichers"), list ->
-                    list.stream()
-                            .filter(data -> nonNull(data.getAdds()))
-                            .filter(data -> filterByType(data, type))
-                            .forEach(data -> {
-                                switch (data.getAdds()) {
-                                    case FIELD -> {
-                                        if (StringUtils.isNotBlank(data.getName()) && StringUtils.isNotBlank(data.getType())) {
-                                            var field = createField(cls, data);
-                                            field.putUserData(AUGMENTED, field.getName());
-                                            result.add(field);
+                        list.stream()
+                                .filter(data -> nonNull(data.getAdds()))
+                                .filter(data -> filterByType(data, type))
+                                .forEach(data -> {
+                                    switch (data.getAdds()) {
+                                        case FIELD -> {
+                                            if (StringUtils.isNotBlank(data.getName()) && StringUtils.isNotBlank(data.getType())) {
+                                                var field = createField(cls, data);
+                                                field.putUserData(AUGMENTED, field.getName());
+                                                result.add(field);
+                                            }
+                                        }
+                                        case METHOD -> {
+                                            //Not implemented
+                                        }
+                                        case CONSTRUCTOR -> {
+                                            var constructor = createMethod(cls, data, true);
+                                            constructor.putUserData(AUGMENTED, constructor.getName());
+                                            result.add(constructor);
                                         }
                                     }
-                                    case METHOD -> {
-                                        //Not implemented
-                                    }
-                                    case CONSTRUCTOR -> {
-                                        var constructor = createMethod(cls, data, true);
-                                        constructor.putUserData(AUGMENTED, constructor.getName());
-                                        result.add(constructor);
-                                    }
-                                }
-                            })
+                                })
 
                 ));
     }
 
-    private PsiMethod createMethod(PsiClass cls, EnricherData data, boolean constructor) {
+    protected PsiMethod createMethod(PsiClass cls, EnricherData data, boolean constructor) {
         var builder = new LightMethodBuilder(cls.getManager(), JavaLanguage.INSTANCE, cls.getName());
         builder.setConstructor(constructor);
         builder.setContainingClass(cls);
@@ -152,7 +146,7 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
         return builder;
     }
 
-    private boolean filterByType(EnricherData data, Class<? extends PsiElement> type) {
+    protected boolean filterByType(EnricherData data, Class<? extends PsiElement> type) {
         return switch (data.getAdds()) {
             case FIELD -> PsiField.class.isAssignableFrom(type);
             case METHOD, CONSTRUCTOR -> PsiMethod.class.isAssignableFrom(type);

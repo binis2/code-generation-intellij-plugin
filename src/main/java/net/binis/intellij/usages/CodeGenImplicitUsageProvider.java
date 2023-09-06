@@ -5,6 +5,7 @@ import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.util.PsiTreeUtil;
+import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
 import org.jetbrains.annotations.NotNull;
 
@@ -30,14 +31,17 @@ public class CodeGenImplicitUsageProvider implements ImplicitUsageProvider {
 
     protected boolean isUsage(PsiElement element) {
         try {
-            if (element instanceof PsiClass cls) {
-                return Lookup.isPrototype(cls);
-            }
+            if (Binis.isCodeGenUsed(element)) {
+                if (element instanceof PsiClass cls) {
+                    return Lookup.isPrototype(cls);
+                }
 
-            return Lookup.isPrototype(PsiTreeUtil.getParentOfType(element, PsiClass.class));
+                return Lookup.isPrototype(PsiTreeUtil.getParentOfType(element, PsiClass.class));
+            }
         } catch (IndexNotReadyException e) {
-            return false;
+            //Do nothing
         }
+        return false;
     }
 
 }

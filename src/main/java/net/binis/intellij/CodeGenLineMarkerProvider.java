@@ -10,6 +10,7 @@ import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.psi.*;
 import com.intellij.task.ProjectTaskManager;
 import net.binis.intellij.icons.CodeGenIcons;
+import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
 import org.jetbrains.annotations.NotNull;
 
@@ -25,7 +26,7 @@ public class CodeGenLineMarkerProvider extends RelatedItemLineMarkerProvider {
     @Override
     protected void collectNavigationMarkers(@NotNull PsiElement element,
                                             @NotNull Collection<? super RelatedItemLineMarkerInfo<?>> result) {
-        if (element instanceof PsiIdentifier && element.getParent() instanceof PsiClass cls && Lookup.isPrototype(cls)) {
+        if (Binis.isCodeGenUsed(element) && element instanceof PsiIdentifier && element.getParent() instanceof PsiClass cls && Lookup.isPrototype(cls)) {
             var ident = Lookup.findIdentifier(cls);
             NavigationGutterIconBuilder<PsiElement> builder =
                     NavigationGutterIconBuilder.create(CodeGenIcons.GENERATE)

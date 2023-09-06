@@ -11,14 +11,16 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
+import net.binis.codegen.collection.EmbeddedCodeCollection;
+import net.binis.codegen.factory.CodeFactory;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
+import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
 import net.binis.intellij.util.PrototypeUtil;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Stream;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
@@ -27,7 +29,7 @@ import static net.binis.codegen.tools.Tools.*;
 
 public class CodeGenAnnotator implements Annotator {
 
-    private Logger log = Logger.getInstance(CodeGenAnnotator.class);
+    private final Logger log = Logger.getInstance(CodeGenAnnotator.class);
 
     private static final Key<Void> GENERATED_KEY = Key.create("binis.generated");
 
@@ -58,6 +60,7 @@ public class CodeGenAnnotator implements Annotator {
         result.add("distinct");
         result.add("group");
         result.add("_add");
+        result.add("_add$");
         result.add("_and");
         result.add("_if");
         result.add("_self");
@@ -100,14 +103,25 @@ public class CodeGenAnnotator implements Annotator {
         result.add("isNotEmpty");
         result.add("builder");
         result.add("build");
+        result.add("_remove");
+        result.add("_clear");
+        result.add("_each");
+        result.add("_ifEmpty");
+        result.add("_ifNotEmpty");
+        result.add("_ifContains");
+        result.add("_ifNotContains");
+        result.add("_find");
+        result.add("_findAll");
+        result.add("_stream");
 
         return result;
     }
 
+
     @Override
     public void annotate(@NotNull final PsiElement element, @NotNull AnnotationHolder holder) {
         try {
-            if (!DumbService.isDumb(element.getProject())) {
+            if (!DumbService.isDumb(element.getProject()) && Binis.isCodeGenUsed(element)) {
                 if (element instanceof PsiClass cls) {
                     var data = Lookup.getPrototypeData(cls);
                     if (nonNull(data)) {

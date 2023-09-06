@@ -8,6 +8,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
 import net.binis.codegen.annotation.type.GenerationStrategy;
+import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -40,9 +41,11 @@ public class PrototypeUsedInspection extends AbstractBaseJavaLocalInspectionTool
     }
 
     protected boolean shouldProcess(PsiElement element) {
-        var cls = PsiTreeUtil.getParentOfType(element, PsiClass.class);
-        if (nonNull(cls) && nonNull(cls.getQualifiedName())) {
-            return !Lookup.isPrototype(cls.getQualifiedName());
+        if (Binis.isCodeGenUsed(element)) {
+            var cls = PsiTreeUtil.getParentOfType(element, PsiClass.class);
+            if (nonNull(cls) && nonNull(cls.getQualifiedName())) {
+                return !Lookup.isPrototype(cls.getQualifiedName());
+            }
         }
 
         return false;
