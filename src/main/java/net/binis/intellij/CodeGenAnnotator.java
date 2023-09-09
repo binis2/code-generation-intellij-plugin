@@ -298,7 +298,7 @@ public class CodeGenAnnotator implements Annotator {
             } else {
                 var strategy = nullCheck(PrototypeUtil.readPrototypeStrategy(element), data.getStrategy());
 
-                if (!cls.isInterface() && in(strategy, PROTOTYPE, IMPLEMENTATION, PLAIN)) {
+                if (!(cls.isInterface() || cls.isEnum()) && in(strategy, PROTOTYPE, PLAIN)) {
                     holder.newAnnotation(HighlightSeverity.ERROR, "@" + ref.getText() + " is allowed only on interfaces!")
                             .range(element.getTextRange()).create();
                     result = false;
