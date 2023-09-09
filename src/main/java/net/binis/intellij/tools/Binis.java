@@ -6,12 +6,12 @@ import lombok.Builder;
 import lombok.Getter;
 import net.binis.intellij.util.CodeGenDependenciesUtil;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Binis {
 
-    protected static final Map<Project, ProjectInfo> projects = new HashMap<>();
+    protected static final Map<Project, ProjectInfo> projects = new ConcurrentHashMap<>();
 
     public static boolean isCodeGenUsed(PsiElement element) {
         return getProjectInfo(element).isCodeGenUsed();
