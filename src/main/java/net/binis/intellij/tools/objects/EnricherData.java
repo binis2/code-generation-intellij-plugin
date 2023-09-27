@@ -23,7 +23,7 @@ public class EnricherData {
     protected PsiClass cls;
     protected AugmentType adds;
     @Builder.Default
-    protected AugmentTargetType targets = AugmentTargetType.EVERYTHING;
+    protected List<AugmentTargetType> targets = List.of(AugmentTargetType.EVERYTHING);
     @Builder.Default
     protected AugmentTargetTypeSeverity severity = AugmentTargetTypeSeverity.ERROR;
     @Builder.Default

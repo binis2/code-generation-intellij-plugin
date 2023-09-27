@@ -7,6 +7,7 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.psi.util.PsiUtilCore;
 import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
 import net.binis.intellij.tools.objects.EnricherData;
@@ -26,7 +27,8 @@ public class CodeGenHighlightErrorFilter implements HighlightInfoFilter {
     public boolean accept(@NotNull HighlightInfo highlightInfo, @Nullable PsiFile file) {
         try {
             if (nonNull(highlightInfo.getDescription()) && file instanceof PsiJavaFile java && Binis.isCodeGenUsed(java)) {
-                var cls = PsiTreeUtil.findChildOfType(java, PsiClass.class);
+                var element = PsiUtilCore.getElementAtOffset(file, highlightInfo.getStartOffset());
+                var cls = element instanceof PsiClass c ? c : PsiTreeUtil.getParentOfType(element, PsiClass.class);
 
                 if (nonNull(cls)) {
                     var data = Lookup.getPrototypeData(cls);

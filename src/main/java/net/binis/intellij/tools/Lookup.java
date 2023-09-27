@@ -635,7 +635,7 @@ public class Lookup {
                     case "adds" ->
                             result.adds(PrototypeUtil.readAnnotationEnumValue(attr.getAttributeValue(), AugmentType.class));
                     case "targets" ->
-                            result.targets(nullCheck(PrototypeUtil.readAnnotationEnumValue(attr.getAttributeValue(), AugmentTargetType.class), AugmentTargetType.EVERYTHING));
+                            result.targets(PrototypeUtil.readAnnotationEnumListValue(attr.getAttributeValue(), AugmentTargetType.class));
                     case "severity" ->
                             result.severity(nullCheck(PrototypeUtil.readAnnotationEnumValue(attr.getAttributeValue(), AugmentTargetTypeSeverity.class), AugmentTargetTypeSeverity.ERROR));
                     case "name" -> {
@@ -659,20 +659,14 @@ public class Lookup {
                                     params.getAttributes().forEach(parAttr -> {
                                         switch (parAttr.getAttributeName()) {
                                             case "filter":
-                                                with(parAttr.getAttributeValue(), v -> {
-                                                    if (v instanceof JvmAnnotationConstantValue val) {
-                                                        with(val.getConstantValue(), c ->
-                                                                result.filter(buildFilter(c.toString())));
-                                                    }
-                                                });
+                                                with(parAttr.getAttributeValue(), v ->
+                                                        PrototypeUtil.readAnnotationConstantValue(v, c ->
+                                                                result.filter(buildFilter(c.toString()))));
                                                 break;
                                             case "suppresses":
-                                                with(parAttr.getAttributeValue(), v -> {
-                                                    if (v instanceof JvmAnnotationConstantValue val) {
-                                                        with(val.getConstantValue(), c ->
-                                                                result.paramsSuppresses(Interpolator.build(c.toString())));
-                                                    }
-                                                });
+                                                with(parAttr.getAttributeValue(), v ->
+                                                        PrototypeUtil.readAnnotationConstantValue(v, c ->
+                                                                result.paramsSuppresses(Interpolator.build(c.toString()))));
                                                 break;
                                             default:
                                         }

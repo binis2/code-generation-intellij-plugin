@@ -117,7 +117,6 @@ public class CodeGenAnnotator implements Annotator {
         return result;
     }
 
-
     @Override
     public void annotate(@NotNull final PsiElement element, @NotNull AnnotationHolder holder) {
         try {
@@ -208,6 +207,8 @@ public class CodeGenAnnotator implements Annotator {
             }
         } catch (IndexNotReadyException e) {
             // ignore
+        } catch (NullPointerException e) {
+            log.warn(e);
         }
     }
 
