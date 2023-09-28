@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.binis.intellij"
-version = "1.1.7"
+version = "1.1.9"
 
 repositories {
     mavenLocal()
@@ -13,7 +13,7 @@ repositories {
 }
 
 dependencies {
-    implementation("dev.binis:code-generator:1.1.7")
+    implementation("dev.binis:code-generator:1.1.9")
 }
 
 // Configure Gradle IntelliJ Plugin
