@@ -530,7 +530,7 @@ public class Lookup {
                     }
                     case "interfaceSetters" -> {
                         if (pair.getValue() instanceof PsiLiteralExpression exp && exp.getValue() instanceof Boolean value) {
-                            builder.interfaceSetters((Boolean) value);
+                            builder.interfaceSetters(value);
                         }
                     }
                     case "base" -> {
@@ -897,7 +897,9 @@ public class Lookup {
                 .strategy(data.getStrategy())
                 .basePath(data.getBasePath())
                 .interfacePath(data.getInterfacePath())
-                .implementationPath(data.getImplementationPath());
+                .implementationPath(data.getImplementationPath())
+                .enrichers(withRes(data.getEnrichers(), ArrayList::new))
+                .inheritedEnrichers(withRes(data.getInheritedEnrichers(), ArrayList::new));
         with(data.getCustom(), custom -> custom.forEach(result::custom));
         return result;
     }
