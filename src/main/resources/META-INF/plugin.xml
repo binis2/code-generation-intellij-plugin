@@ -24,6 +24,8 @@
     <li>Gutter icon to allow fast regeneration of the selected prototype.</li>
     <li>Extends Find Usages to take prototypes into account.</li>
     </ul>
+
+    Change log can be found <a href='https://github.com/binis2/code-generation/blob/master/changelog.md'>here</a>
   ]]></description>
 
     <!-- Product and plugin compatibility requirements.
