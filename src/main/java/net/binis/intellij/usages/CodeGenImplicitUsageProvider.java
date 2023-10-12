@@ -1,6 +1,7 @@
 package net.binis.intellij.usages;
 
 import com.intellij.codeInsight.daemon.ImplicitUsageProvider;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
@@ -9,9 +10,6 @@ import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
 import org.jetbrains.annotations.NotNull;
 
-/**
- * Provides implicit usages of lombok fields
- */
 public class CodeGenImplicitUsageProvider implements ImplicitUsageProvider {
 
     @Override
@@ -31,7 +29,7 @@ public class CodeGenImplicitUsageProvider implements ImplicitUsageProvider {
 
     protected boolean isUsage(PsiElement element) {
         try {
-            if (Binis.isCodeGenUsed(element)) {
+            if (!DumbService.isDumb(element.getProject()) && Binis.isCodeGenUsed(element)) {
                 if (element instanceof PsiClass cls) {
                     return Lookup.isPrototype(cls);
                 }

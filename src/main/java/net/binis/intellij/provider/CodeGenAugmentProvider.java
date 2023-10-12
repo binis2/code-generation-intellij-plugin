@@ -105,32 +105,34 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
 
     @SuppressWarnings("unchecked")
     protected void checkForAnnotationAugments(List<PsiElement> result, PsiClass cls, Class<? extends PsiElement> type) {
-        with(Lookup.getPrototypeData(cls), proto ->
-                with((List<EnricherData>) proto.getCustom().get("enrichers"), list ->
-                        list.stream()
-                                .filter(data -> nonNull(data.getAdds()))
-                                .filter(data -> filterByType(data, type))
-                                .forEach(data -> {
-                                    switch (data.getAdds()) {
-                                        case FIELD -> {
-                                            if (StringUtils.isNotBlank(data.getName()) && StringUtils.isNotBlank(data.getType())) {
-                                                var field = createField(cls, data);
-                                                field.putUserData(AUGMENTED, field.getName());
-                                                result.add(field);
+        if (!cls.isAnnotationType()) {
+            with(Lookup.getPrototypeData(cls), proto ->
+                    with((List<EnricherData>) proto.getCustom().get("enrichers"), list ->
+                            list.stream()
+                                    .filter(data -> nonNull(data.getAdds()))
+                                    .filter(data -> filterByType(data, type))
+                                    .forEach(data -> {
+                                        switch (data.getAdds()) {
+                                            case FIELD -> {
+                                                if (StringUtils.isNotBlank(data.getName()) && StringUtils.isNotBlank(data.getType())) {
+                                                    var field = createField(cls, data);
+                                                    field.putUserData(AUGMENTED, field.getName());
+                                                    result.add(field);
+                                                }
+                                            }
+                                            case METHOD -> {
+                                                //Not implemented
+                                            }
+                                            case CONSTRUCTOR -> {
+                                                var constructor = createMethod(cls, data, true);
+                                                constructor.putUserData(AUGMENTED, constructor.getName());
+                                                result.add(constructor);
                                             }
                                         }
-                                        case METHOD -> {
-                                            //Not implemented
-                                        }
-                                        case CONSTRUCTOR -> {
-                                            var constructor = createMethod(cls, data, true);
-                                            constructor.putUserData(AUGMENTED, constructor.getName());
-                                            result.add(constructor);
-                                        }
-                                    }
-                                })
+                                    })
 
-                ));
+                    ));
+        }
     }
 
     protected PsiMethod createMethod(PsiClass cls, EnricherData data, boolean constructor) {

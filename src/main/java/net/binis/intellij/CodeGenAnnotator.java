@@ -128,8 +128,9 @@ public class CodeGenAnnotator implements Annotator {
                         var intfCls = Lookup.findClass(intf);
                         var ident = Lookup.findIdentifier(cls);
                         if (nonNull(ident)) {
+                            var className = intfCls.map(psiClass -> (psiClass.getContainingFile().getVirtualFile().getCanonicalPath() + ":" + psiClass.getTextOffset())).orElse("unknown");
                             holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                                    .tooltip((intfCls.map(PsiElement::getContainingFile).isPresent() ? "Generated" : "Generates") + " <a href=\"#navigation/" + intfCls.map(psiClass -> (psiClass.getContainingFile().getVirtualFile().getCanonicalPath() + ":" + psiClass.getTextOffset())).orElse("unknown") + "\">" + intf + "</a>")
+                                    .tooltip((intfCls.map(PsiElement::getContainingFile).isPresent() ? "Generated" : "Generates") + " <a href=\"#navigation/" + className + "\">" + intf + "</a>")
                                     .range(ident.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.CLASS_NAME).create();
                         }
                     } else if (Lookup.isGenerated(cls.getQualifiedName())) {
@@ -164,8 +165,9 @@ public class CodeGenAnnotator implements Annotator {
                                                 .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE).create();
                                     }
                                 } else {
+                                    var className = intfCls.map(psiClass -> (psiClass.getContainingFile().getVirtualFile().getCanonicalPath() + ":" + psiClass.getTextOffset())).orElse("unknown");
                                     holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                                            .tooltip("Generates <a href=\"#navigation/" + intfCls.map(psiClass -> (psiClass.getContainingFile().getVirtualFile().getCanonicalPath() + ":" + psiClass.getTextOffset())).orElse("unknown") + "\">" + intf + "</a>")
+                                            .tooltip("Generates <a href=\"#navigation/" + className + "\">" + intf + "</a>")
                                             .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.KEYWORD).create();
                                 }
                             }
