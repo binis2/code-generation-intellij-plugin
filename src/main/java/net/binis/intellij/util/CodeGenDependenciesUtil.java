@@ -69,7 +69,7 @@ public class CodeGenDependenciesUtil {
                     }
                 }
             }
-            if (name != null && name.contains("code-generation")) {
+            if (name != null && name.startsWith("code-generator-")) {
                 var version = getVersionFromJarName(name);
                 if (!version.isEmpty() && Character.isDigit(version.charAt(0))) {
                     return version;

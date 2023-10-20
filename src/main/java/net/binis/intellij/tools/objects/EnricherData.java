@@ -2,13 +2,11 @@ package net.binis.intellij.tools.objects;
 
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiParameter;
-import com.intellij.psi.PsiParameterList;
 import lombok.Builder;
 import lombok.Data;
 import net.binis.codegen.annotation.augment.AugmentTargetType;
 import net.binis.codegen.annotation.augment.AugmentTargetTypeSeverity;
 import net.binis.codegen.annotation.augment.AugmentType;
-import net.binis.codegen.annotation.augment.CodeAugmentParameters;
 import net.binis.codegen.tools.Interpolator;
 
 import java.lang.reflect.Modifier;
@@ -32,9 +30,16 @@ public class EnricherData {
     protected String type = "";
     @Builder.Default
     protected long modifier = Modifier.PUBLIC;
-    protected CodeAugmentParameters parameters;
+    protected List<Parameter> parameters;
     protected Function<PsiClass, Stream<PsiParameter>> filter;
     protected Interpolator suppresses;
     protected Interpolator paramsSuppresses;
+
+    @Data
+    @Builder
+    public static class Parameter {
+        protected String name = "";
+        protected String type = "";
+    }
 
 }

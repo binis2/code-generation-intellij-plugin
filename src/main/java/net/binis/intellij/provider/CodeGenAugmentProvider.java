@@ -1,6 +1,7 @@
 package net.binis.intellij.provider;
 
 import com.intellij.lang.java.JavaLanguage;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.util.Key;
 import com.intellij.psi.*;
@@ -12,7 +13,6 @@ import com.intellij.psi.impl.source.PsiAnnotationMethodImpl;
 import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
 import net.binis.intellij.tools.objects.EnricherData;
-import net.binis.intellij.util.CodeGenDependenciesUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -40,7 +40,7 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                                                           @Nullable String nameHint) {
         List<PsiElement> result = new ArrayList<>();
         try {
-            if (Binis.isCodeGenUsed(element) && !Lookup.getRegisteringTemplate()) {
+            if (!DumbService.isDumb(element.getProject()) && Binis.isCodeGenUsed(element) && !Lookup.getRegisteringTemplate()) {
                 if (element instanceof PsiClass cls && cls.getLanguage().isKindOf(JavaLanguage.INSTANCE)) {
                     if (cls.isAnnotationType()) {
                         if (PsiMethod.class.equals(type) && notNull(cls.getExtendsList()) && Binis.isAnnotationInheritanceEnabled(element.getProject())) {
@@ -121,7 +121,11 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                                                 }
                                             }
                                             case METHOD -> {
-                                                //Not implemented
+                                                if (StringUtils.isNotBlank(data.getName()) && StringUtils.isNotBlank(data.getType())) {
+                                                    var method = createMethod(cls, data, false);
+                                                    method.putUserData(AUGMENTED, method.getName());
+                                                    result.add(method);
+                                                }
                                             }
                                             case CONSTRUCTOR -> {
                                                 var constructor = createMethod(cls, data, true);
@@ -136,7 +140,7 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
     }
 
     protected PsiMethod createMethod(PsiClass cls, EnricherData data, boolean constructor) {
-        var builder = new LightMethodBuilder(cls.getManager(), JavaLanguage.INSTANCE, cls.getName());
+        var builder = new LightMethodBuilder(cls.getManager(), JavaLanguage.INSTANCE, constructor ? cls.getName() : data.getName());
         builder.setConstructor(constructor);
         builder.setContainingClass(cls);
         builder.setNavigationElement(cls);
@@ -145,6 +149,10 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
         if (nonNull(data.getFilter())) {
             data.getFilter().apply(cls).forEach(builder::addParameter);
         }
+        with(data.getParameters(), params ->
+                params.forEach(param ->
+                        builder.addParameter(param.getName(), param.getType())));
+
         return builder;
     }
 

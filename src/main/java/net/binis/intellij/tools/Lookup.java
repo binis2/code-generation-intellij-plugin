@@ -1,6 +1,8 @@
 package net.binis.intellij.tools;
 
 import com.github.javaparser.ast.expr.Name;
+import com.intellij.lang.jvm.JvmAnnotation;
+import com.intellij.lang.jvm.annotation.JvmAnnotationArrayValue;
 import com.intellij.lang.jvm.annotation.JvmAnnotationConstantValue;
 import com.intellij.lang.jvm.annotation.JvmNestedAnnotationValue;
 import com.intellij.openapi.diagnostic.Logger;
@@ -11,8 +13,7 @@ import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
-import com.intellij.psi.impl.light.LightParameter;
-import com.intellij.psi.impl.light.LightParameterListBuilder;
+import com.intellij.psi.impl.source.PsiClassReferenceType;
 import com.intellij.psi.impl.source.PsiExtensibleClass;
 import com.intellij.psi.impl.source.PsiImmediateClassType;
 import com.intellij.psi.search.GlobalSearchScope;
@@ -29,14 +30,12 @@ import net.binis.codegen.annotation.augment.CodeAugment;
 import net.binis.codegen.annotation.type.GenerationStrategy;
 import net.binis.codegen.discovery.Discoverer;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
-import net.binis.codegen.tools.Holder;
 import net.binis.codegen.tools.Interpolator;
 import net.binis.intellij.objects.CodeGenLightParameter;
 import net.binis.intellij.services.CodeGenProjectService;
 import net.binis.intellij.tools.objects.EnricherData;
 import net.binis.intellij.util.PrototypeUtil;
 import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.concurrency.Promise;
 
 import java.util.*;
@@ -371,7 +370,7 @@ public class Lookup {
         }
     }
 
-    protected static boolean processPrototype(String name) {
+    public static boolean processPrototype(String name) {
         var clas = findClass(name);
         if (clas.isPresent()) {
             if ("net.binis.codegen.annotation.CodePrototype".equals(name) || "net.binis.codegen.annotation.EnumPrototype".equals(name)) {
@@ -616,7 +615,7 @@ public class Lookup {
     }
 
     protected static void handleEnrichersValue(List<EnricherData> list, PsiAnnotationMemberValue value) {
-        if (value instanceof PsiClassObjectAccessExpression exp && exp.getType() instanceof PsiImmediateClassType) {
+        if (value instanceof PsiClassObjectAccessExpression exp && (exp.getType() instanceof PsiImmediateClassType || exp.getType() instanceof PsiClass || exp.getType() instanceof PsiClassReferenceType)) {
             findClass(exp.getOperand().getType().getCanonicalText())
                     .ifPresent(cls -> list.add(buildEnricherData(cls)));
         } else if (value instanceof PsiArrayInitializerMemberValue exp) {
@@ -668,6 +667,21 @@ public class Lookup {
                                                         PrototypeUtil.readAnnotationConstantValue(v, c ->
                                                                 result.paramsSuppresses(Interpolator.build(c.toString()))));
                                                 break;
+                                            case "params":
+                                                if (parAttr.getAttributeValue() instanceof JvmNestedAnnotationValue pars) {
+                                                    var list = new ArrayList<EnricherData.Parameter>();
+                                                    with(pars.getValue(), p -> list.add(processParam(p)));
+                                                    result.parameters(list);
+                                                } else if (parAttr.getAttributeValue() instanceof JvmAnnotationArrayValue pars) {
+                                                    var list = new ArrayList<EnricherData.Parameter>();
+                                                    pars.getValues().forEach(v -> {
+                                                        if (v instanceof JvmNestedAnnotationValue val) {
+                                                            list.add(processParam(val.getValue()));
+                                                            result.parameters(list);
+                                                        }
+                                                    });
+                                                }
+                                                break;
                                             default:
                                         }
                                     }));
@@ -676,6 +690,27 @@ public class Lookup {
                 }
             });
         }
+        return result.build();
+    }
+
+    private static EnricherData.Parameter processParam(JvmAnnotation param) {
+        var result = EnricherData.Parameter.builder();
+        param.getAttributes().forEach(a -> {
+            switch (a.getAttributeName()) {
+                case "name":
+                    with(a.getAttributeValue(), v ->
+                            PrototypeUtil.readAnnotationConstantValue(v, c ->
+                                    result.name(c.toString())));
+                    break;
+                case "type":
+                    with(a.getAttributeValue(), v ->
+                            PrototypeUtil.readAnnotationConstantValue(v, c ->
+                                    result.type(c.toString())));
+                    break;
+                default:
+            }
+        });
+
         return result.build();
     }
 
@@ -768,15 +803,18 @@ public class Lookup {
         registeringTemplate.set(true);
         try {
             defaultProperties.put(template.getQualifiedName(), () -> {
-                var builder = defaultBuilder();
+                var parent = Arrays.stream(template.getAnnotations())
+                        .filter(a -> defaultProperties.containsKey(a.getQualifiedName()))
+                        .findFirst();
+
+                var builder = parent.isPresent() ? defaultProperties.get(parent.get().getQualifiedName()).get() : defaultBuilder();
+
+                parent.ifPresent(a ->
+                        readAnnotation(a, builder));
 
                 if (EnumPrototype.class.getCanonicalName().equals(template.getQualifiedName())) {
                     builder.custom("enum", true);
                 }
-
-                Arrays.stream(template.getAnnotations())
-                        .filter(a -> defaultProperties.containsKey(a.getQualifiedName()))
-                        .forEach(a -> readAnnotation(a, builder));
 
                 var methods = template instanceof PsiExtensibleClass ext ? ext.getOwnMethods().stream() : Arrays.stream(template.getMethods());
 
@@ -854,22 +892,36 @@ public class Lookup {
     }
 
 
-    public static Set<Module> refreshCache(VirtualFile file) {
+    public static Set<Module> refreshCache(Project project, VirtualFile file) {
         var result = new HashSet<Module>();
-        var list = List.copyOf(classes.values());
-        list.stream()
-                .filter(desc -> {
-                    try {
-                        return desc.cls.getContainingFile().getVirtualFile().equals(file);
-                    } catch (Exception e) {
-                        return false;
-                    }
-                })
-                .forEach(desc -> {
-                    if (nonNull(withRes(desc.cls.getQualifiedName(), classes::remove))) {
-                        result.add(getModule(desc.cls));
-                    }
-                });
+
+        with(PsiTreeUtil.getChildrenOfType(PsiManager.getInstance(project).findFile(file), PsiClass.class), array ->
+                Arrays.stream(array)
+                        .forEach(cls -> {
+                            var proto = false;
+                            var name = cls.getQualifiedName();
+
+                            if (nonNull(classes.remove(name))) {
+                                log.info("Removing class '" + name + "' from classes cache!");
+                            }
+                            if (nonNull(prototypes.remove(name))) {
+                                log.info("Removing class '" + name + "' from prototypes cache!");
+                                proto = true;
+                            }
+                            if (nonTemplates.remove(name)) {
+                                log.info("Removing class '" + name + "' from nonTemplates cache!");
+                            }
+                            if (nonNull(generated.remove(name))) {
+                                log.info("Removing class '" + name + "' from generated cache!");
+                            }
+                            if (nonGenerated.remove(name)) {
+                                log.info("Removing class '" + name + "' from nonGenerated cache!");
+                            }
+                            if (proto) {
+                                Lookup.processPrototype(name);
+                            }
+                        }));
+
         return result;
     }
 

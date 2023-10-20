@@ -13,12 +13,13 @@ public class CodeGenProjectService {
     private static final Logger log = Logger.getInstance(CodeGenProjectService.class);
 
     public CodeGenProjectService(Project project) {
+        log.info("Project (" + project.getName() + ") service started");
         project.getMessageBus().connect().subscribe(UpdatedFilesListener.UPDATED_FILES,
                 (UpdatedFilesListener) files ->
                         files.forEach(file -> log.warn("File updated: " + file)));
 
         project.getMessageBus().connect().subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, new CodeGenFileEditorManagerListener());
 
-        project.getMessageBus().connect().subscribe(VirtualFileManager.VFS_CHANGES, new CodeGenBulkFileListener());
+        project.getMessageBus().connect().subscribe(VirtualFileManager.VFS_CHANGES, new CodeGenBulkFileListener(project));
     }
 }
