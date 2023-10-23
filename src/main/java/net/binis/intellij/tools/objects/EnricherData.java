@@ -38,7 +38,9 @@ public class EnricherData {
     @Data
     @Builder
     public static class Parameter {
+        @Builder.Default
         protected String name = "";
+        @Builder.Default
         protected String type = "";
     }
 

@@ -1,6 +1,7 @@
 package net.binis.intellij.provider;
 
 import com.intellij.lang.java.JavaLanguage;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.util.Key;
@@ -10,6 +11,7 @@ import com.intellij.psi.impl.light.LightFieldBuilder;
 import com.intellij.psi.impl.light.LightMethodBuilder;
 import com.intellij.psi.impl.light.LightModifierList;
 import com.intellij.psi.impl.source.PsiAnnotationMethodImpl;
+import net.binis.intellij.CodeGenAnnotator;
 import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
 import net.binis.intellij.tools.objects.EnricherData;
@@ -27,8 +29,8 @@ import static net.binis.codegen.tools.Tools.with;
 
 public class CodeGenAugmentProvider extends PsiAugmentProvider {
 
+    private final Logger log = Logger.getInstance(CodeGenAnnotator.class);
     protected static final Key<String> AUGMENTED = Key.create("AUGMENTED");
-
     protected static final ThreadLocal<Set<PsiElement>> _augmenting = new ThreadLocal<>();
 
 
@@ -99,6 +101,8 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
             }
         } catch (IndexNotReadyException e) {
             //Do nothing
+        } catch (Throwable e) {
+            log.warn(e);
         }
         return (List) result;
     }

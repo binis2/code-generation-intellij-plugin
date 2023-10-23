@@ -211,6 +211,8 @@ public class CodeGenAnnotator implements Annotator {
             // ignore
         } catch (NullPointerException e) {
             log.warn(e);
+        } catch (PsiInvalidElementAccessException e) {
+            log.warn(e);
         }
     }
 
