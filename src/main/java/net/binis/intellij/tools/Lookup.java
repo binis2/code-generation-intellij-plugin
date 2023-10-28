@@ -109,7 +109,7 @@ public class Lookup {
         } catch (ProcessCanceledException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Failed to register class: " + cls.getQualifiedName(), e);
+            log.warn("Failed to register class: " + cls.getQualifiedName(), e);
         } finally {
             projects.computeIfAbsent(cls.getProject(), p ->
                     p.getService(CodeGenProjectService.class));
@@ -645,6 +645,11 @@ public class Lookup {
                     case "type" -> {
                         if (attr.getAttributeValue() instanceof JvmAnnotationConstantValue exp && exp.getConstantValue() instanceof String value && StringUtils.isNotBlank(value)) {
                             result.type(value);
+                        }
+                    }
+                    case "description" -> {
+                        if (attr.getAttributeValue() instanceof JvmAnnotationConstantValue exp && exp.getConstantValue() instanceof String value && StringUtils.isNotBlank(value)) {
+                            result.description(value);
                         }
                     }
                     case "modifier" -> {

@@ -1,5 +1,6 @@
 package net.binis.intellij;
 
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.patterns.PlatformPatterns;
@@ -15,6 +16,8 @@ import static java.util.Objects.nonNull;
 
 public class CodeGenReferenceContributor extends PsiReferenceContributor {
 
+    private static final Logger log = Logger.getInstance(CodeGenReferenceContributor.class);
+
     @Override
     public void registerReferenceProviders(@NotNull PsiReferenceRegistrar registrar) {
         registrar.registerReferenceProvider(PlatformPatterns.psiElement(PsiLiteralExpression.class),
@@ -22,18 +25,22 @@ public class CodeGenReferenceContributor extends PsiReferenceContributor {
                     @Override
                     public PsiReference @NotNull [] getReferencesByElement(@NotNull PsiElement element,
                                                                            @NotNull ProcessingContext context) {
-                        var ann = PsiTreeUtil.getParentOfType(element, PsiAnnotation.class);
-                        if (nonNull(ann) && element instanceof PsiLiteralExpression expression) {
-                            if (element.getParent() instanceof PsiNameValuePair pair &&
-                                    "value".equals(pair.getName()) &&
-                                    pair.getParent() instanceof PsiAnnotationParameterList list &&
-                                    "javax.annotation.processing.Generated".equals(ann.getQualifiedName())) {
-                                var value = (String) expression.getValue();
-                                return buildClassReferences(element, value);
-                            } else if ("net.binis.codegen.annotation.Default".equals(ann.getQualifiedName())) {
-                                var value = (String) expression.getValue();
-                                return buildClassReferences(element, value);
+                        try {
+                            var ann = PsiTreeUtil.getParentOfType(element, PsiAnnotation.class);
+                            if (nonNull(ann) && element instanceof PsiLiteralExpression expression) {
+                                if (element.getParent() instanceof PsiNameValuePair pair &&
+                                        "value".equals(pair.getName()) &&
+                                        pair.getParent() instanceof PsiAnnotationParameterList list &&
+                                        "javax.annotation.processing.Generated".equals(ann.getQualifiedName())) {
+                                    var value = (String) expression.getValue();
+                                    return buildClassReferences(element, value);
+                                } else if ("net.binis.codegen.annotation.Default".equals(ann.getQualifiedName())) {
+                                    var value = (String) expression.getValue();
+                                    return buildClassReferences(element, value);
+                                }
                             }
+                        } catch (Exception e) {
+                            log.warn(e);
                         }
                         return PsiReference.EMPTY_ARRAY;
                     }

@@ -1,6 +1,7 @@
 package net.binis.intellij.util;
 
 import com.intellij.compiler.CompilerConfiguration;
+import com.intellij.ide.plugins.cl.PluginAwareClassLoader;
 import com.intellij.ide.plugins.cl.PluginClassLoader;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;

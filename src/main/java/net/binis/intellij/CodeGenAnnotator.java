@@ -16,10 +16,13 @@ import net.binis.codegen.factory.CodeFactory;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
 import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
+import net.binis.intellij.tools.objects.EnricherData;
 import net.binis.intellij.util.PrototypeUtil;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Objects.isNull;
@@ -124,13 +127,18 @@ public class CodeGenAnnotator implements Annotator {
                 if (element instanceof PsiClass cls) {
                     var data = Lookup.getPrototypeData(cls);
                     if (nonNull(data)) {
+                        var augments = calcAugments(data);
                         var intf = Lookup.getGeneratedName(cls);
                         var intfCls = Lookup.findClass(intf);
                         var ident = Lookup.findIdentifier(cls);
                         if (nonNull(ident)) {
                             var className = intfCls.map(psiClass -> (psiClass.getContainingFile().getVirtualFile().getCanonicalPath() + ":" + psiClass.getTextOffset())).orElse("unknown");
+                            var tooltip = (intfCls.map(PsiElement::getContainingFile).isPresent() ? "Generated" : "Generates") + " <a href=\"#navigation/" + className + "\">" + intf + "</a>";
+                            if (StringUtils.isNotBlank(augments)) {
+                                tooltip += "<br>" + augments;
+                            }
                             holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                                    .tooltip((intfCls.map(PsiElement::getContainingFile).isPresent() ? "Generated" : "Generates") + " <a href=\"#navigation/" + className + "\">" + intf + "</a>")
+                                    .tooltip(tooltip)
                                     .range(ident.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.CLASS_NAME).create();
                         }
                     } else if (Lookup.isGenerated(cls.getQualifiedName())) {
@@ -160,8 +168,13 @@ public class CodeGenAnnotator implements Annotator {
                             if (intfCls.map(PsiElement::getContainingFile).isPresent()) {
                                 if (ref.getParent() instanceof PsiAnnotation || !PROTOTYPE.equals(data.getStrategy())) {
                                     if (checkForErrors(data, element, ref, holder)) {
+                                        var augments = calcAugments(data);
+                                        var tooltip = "Generation strategy: " + (Lookup.isEnum(data) ? "Enum" : data.getStrategy().name());
+                                        if (StringUtils.isNotBlank(augments)) {
+                                            tooltip += "<br>" + augments;
+                                        }
                                         holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                                                .tooltip("Generation strategy: " + (Lookup.isEnum(data) ? "Enum" : data.getStrategy().name()))
+                                                .tooltip(tooltip)
                                                 .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE).create();
                                     }
                                 } else {
@@ -175,8 +188,13 @@ public class CodeGenAnnotator implements Annotator {
                             data = Lookup.isPrototypeAnnotation(ref.getQualifiedName());
                             if (nonNull(data)) {
                                 if (checkForErrors(data, element, ref, holder)) {
+                                    var augments = calcAugments(data);
+                                    var tooltip = "Generation strategy: " + (Lookup.isEnum(data) ? "Enum" : data.getStrategy().name());
+                                    if (StringUtils.isNotBlank(augments)) {
+                                        tooltip += "<br>" + augments;
+                                    }
                                     holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                                            .tooltip("Generation strategy: " + (Lookup.isEnum(data) ? "Enum" : data.getStrategy().name()))
+                                            .tooltip(tooltip)
                                             .range(element.getTextRange()).textAttributes(DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE).create();
                                 }
                             } else if (nonNull(ref.getParent()) && ref.getParent() instanceof PsiAnnotation ann) {
@@ -209,11 +227,19 @@ public class CodeGenAnnotator implements Annotator {
             }
         } catch (IndexNotReadyException e) {
             // ignore
-        } catch (NullPointerException e) {
-            log.warn(e);
-        } catch (PsiInvalidElementAccessException e) {
+        } catch (NullPointerException | PsiInvalidElementAccessException e) {
             log.warn(e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String calcAugments(PrototypeData proto) {
+        return withRes((List<EnricherData>) proto.getCustom().get("enrichers"), list ->
+                list.stream()
+                        .filter(data -> nonNull(data.getAdds()))
+                        .map(EnricherData::getDescription)
+                        .filter(StringUtils::isNotBlank)
+                        .collect(Collectors.joining("<br>")));
     }
 
     protected void calcEnumTooltip(PsiElement element, PsiField field, AnnotationHolder holder, PsiClass cls, PsiClass proto, PrototypeData dta) {
