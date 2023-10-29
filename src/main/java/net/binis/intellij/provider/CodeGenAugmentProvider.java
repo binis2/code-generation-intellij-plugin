@@ -101,6 +101,8 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
             }
         } catch (IndexNotReadyException e) {
             //Do nothing
+        } catch (Exception e) {
+            log.warn(e);
         } catch (Throwable e) {
             log.warn(e);
         }
