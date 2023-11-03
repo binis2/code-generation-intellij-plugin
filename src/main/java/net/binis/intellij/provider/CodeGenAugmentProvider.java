@@ -2,6 +2,7 @@ package net.binis.intellij.provider;
 
 import com.intellij.lang.java.JavaLanguage;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.util.Key;
@@ -101,6 +102,8 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
             }
         } catch (IndexNotReadyException e) {
             //Do nothing
+        } catch (ProcessCanceledException e) {
+            throw e;
         } catch (Exception e) {
             log.warn(e);
         } catch (Throwable e) {
