@@ -80,10 +80,11 @@ public class Lookup {
 
     public static synchronized void registerClass(PsiClass cls) {
         try {
-            if (nonNull(cls.getQualifiedName())) {
+            var name = cls.getQualifiedName();
+            if (nonNull(name) && !classes.containsKey(name)) {
                 registeringClass.set(true);
                 try {
-                    classes.put(cls.getQualifiedName(), LookupDescription.builder()
+                    classes.put(name, LookupDescription.builder()
                             .cls(cls)
                             .prototype(Arrays.stream(cls.getAnnotations())
                                     .map(a -> {
@@ -102,6 +103,7 @@ public class Lookup {
                                     .orElse(null))
                             .build());
                     checkGenerated(cls);
+                    log.info("Registered class: " + name);
                 } finally {
                     registeringClass.set(false);
                 }
@@ -109,7 +111,7 @@ public class Lookup {
         } catch (ProcessCanceledException e) {
             throw e;
         } catch (Exception e) {
-            log.warn("Failed to register class: " + cls.getQualifiedName(), e);
+            log.warn("Failed to register class: " + cls.getQualifiedName() + " - " + e.getMessage(), e);
         } finally {
             projects.computeIfAbsent(cls.getProject(), p ->
                     p.getService(CodeGenProjectService.class));
@@ -196,17 +198,26 @@ public class Lookup {
     }
 
     protected static boolean checkGenerated(PsiClass cls) {
-        var ann = cls.getAnnotation("javax.annotation.processing.Generated");
-        if (nonNull(ann)) {
-            var value = ann.findAttributeValue("value");
-            if (value instanceof PsiLiteralExpression exp) {
-                var proto = (String) exp.getValue();
-                generated.put(cls.getQualifiedName(), proto);
-                findClass(proto).ifPresent(Lookup::registerClass);
-                return true;
-            }
+        var name = cls.getQualifiedName();
+        if (generated.containsKey(name)) {
+            return true;
         }
-        nonGenerated.add(cls.getQualifiedName());
+        if (!nonGenerated.contains(name)) {
+            var ann = cls.getAnnotation("javax.annotation.processing.Generated");
+            if (nonNull(ann)) {
+                var value = ann.findAttributeValue("value");
+                if (value instanceof PsiLiteralExpression exp) {
+                    var proto = (String) exp.getValue();
+                    generated.put(name, proto);
+                    log.info("Registered generated class: " + name);
+                    findClass(proto).ifPresent(Lookup::registerClass);
+                    return true;
+                }
+            }
+            log.info("Registered non-generated class: " + name);
+            nonGenerated.add(name);
+        }
+
         return false;
     }
 
@@ -805,10 +816,12 @@ public class Lookup {
     }
 
     public static void registerTemplate(PsiClass template) {
-        if (!defaultProperties.containsKey(template.getQualifiedName())) {
+        var name = template.getQualifiedName();
+        if (!defaultProperties.containsKey(name)) {
             registeringTemplate.set(true);
             try {
-                defaultProperties.put(template.getQualifiedName(), () -> {
+                log.info("Registering template '" + name + "'!");
+                defaultProperties.put(name, () -> {
                     var parent = Arrays.stream(template.getAnnotations())
                             .filter(a -> defaultProperties.containsKey(a.getQualifiedName()))
                             .findFirst();
@@ -818,7 +831,7 @@ public class Lookup {
                     parent.ifPresent(a ->
                             readAnnotation(a, builder));
 
-                    if (EnumPrototype.class.getCanonicalName().equals(template.getQualifiedName())) {
+                    if (EnumPrototype.class.getCanonicalName().equals(name)) {
                         builder.custom("enum", true);
                     }
 
@@ -896,10 +909,12 @@ public class Lookup {
                 Arrays.stream(array)
                         .forEach(cls -> {
                             var proto = false;
+                            var clazz = false;
                             var name = cls.getQualifiedName();
 
                             if (nonNull(classes.remove(name))) {
                                 log.info("Removing class '" + name + "' from classes cache!");
+                                clazz = true;
                             }
                             if (nonNull(prototypes.remove(name))) {
                                 log.info("Removing class '" + name + "' from prototypes cache!");
@@ -910,12 +925,17 @@ public class Lookup {
                             }
                             if (nonNull(generated.remove(name))) {
                                 log.info("Removing class '" + name + "' from generated cache!");
+                                clazz = true;
                             }
                             if (nonGenerated.remove(name)) {
                                 log.info("Removing class '" + name + "' from nonGenerated cache!");
+                                clazz = true;
                             }
                             if (proto) {
                                 Lookup.processPrototype(name);
+                            }
+                            if (clazz) {
+                                Lookup.findClass(name).ifPresent(Lookup::registerClass);
                             }
                         }));
 
