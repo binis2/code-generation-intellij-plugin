@@ -5,14 +5,13 @@ import com.intellij.lang.annotation.Annotator;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
-import net.binis.codegen.collection.EmbeddedCodeCollection;
-import net.binis.codegen.factory.CodeFactory;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
 import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
@@ -21,13 +20,16 @@ import net.binis.intellij.util.PrototypeUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
-import static net.binis.codegen.annotation.type.GenerationStrategy.*;
+import static net.binis.codegen.annotation.type.GenerationStrategy.PLAIN;
+import static net.binis.codegen.annotation.type.GenerationStrategy.PROTOTYPE;
 import static net.binis.codegen.tools.Tools.*;
 
 public class CodeGenAnnotator implements Annotator {
@@ -227,6 +229,8 @@ public class CodeGenAnnotator implements Annotator {
             }
         } catch (IndexNotReadyException e) {
             // ignore
+        } catch (ProcessCanceledException e) {
+            throw e;
         } catch (NullPointerException | PsiInvalidElementAccessException e) {
             log.warn(e);
         }
@@ -273,6 +277,8 @@ public class CodeGenAnnotator implements Annotator {
                         .range(element.getTextRange()).create();
 
             });
+        } catch (ProcessCanceledException e) {
+            throw e;
         } catch (Exception e) {
             log.warn(e);
         }
@@ -306,7 +312,8 @@ public class CodeGenAnnotator implements Annotator {
                     }
 
                     if (!valid) {
-                        holder.newAnnotation(HighlightSeverity.ERROR, "Target '" + type + "' is not in the list of allowed targets for '" + annotation.getNameReferenceElement().getText() + "': " + targets)
+                        var text = annotation.getNameReferenceElement().getText();
+                        holder.newAnnotation(HighlightSeverity.ERROR, "Target '" + type + "' is not in the list of allowed targets for '" + text + "': " + targets)
                                 .range(element.getTextRange()).create();
                     }
                 });
