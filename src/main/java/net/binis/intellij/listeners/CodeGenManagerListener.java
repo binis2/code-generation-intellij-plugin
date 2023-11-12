@@ -10,7 +10,6 @@ public class CodeGenManagerListener implements ProjectManagerListener {
 
     @Override
     public void projectClosed(@NotNull Project project) {
-        Lookup.projects.remove(project);
         Binis.clear(project);
     }
 

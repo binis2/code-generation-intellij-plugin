@@ -5,6 +5,7 @@ import com.intellij.ide.projectWizard.NewProjectWizardConstants;
 import com.intellij.lang.java.JavaLanguage;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
@@ -31,16 +32,22 @@ public class CodeGenBulkFileListener implements BulkFileListener {
 
     @Override
     public void after(List<? extends VFileEvent> events) {
-        var modules = new HashSet<Module>();
-        events.stream()
-                .filter(VFileEvent::isFromSave)
-                .forEach(e -> {
-                    if (nonNull(e.getFile()) && JavaFileType.INSTANCE.equals(e.getFile().getFileType())) {
-                        modules.addAll(Lookup.refreshCache(project, e.getFile()));
-                    }
-                });
+        try {
+            var modules = new HashSet<Module>();
+            events.stream()
+                    .filter(VFileEvent::isFromSave)
+                    .forEach(e -> {
+                        if (nonNull(e.getFile()) && JavaFileType.INSTANCE.equals(e.getFile().getFileType())) {
+                            modules.addAll(Lookup.refreshCache(project, e.getFile()));
+                        }
+                    });
 
-        //TODO: Find a way to determine if the module is dirty
-        //modules.forEach(Lookup::rebuildModule);
+            //TODO: Find a way to determine if the module is dirty
+            //modules.forEach(Lookup::rebuildModule);
+        } catch (ProcessCanceledException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Failed to process file events", e);
+        }
     }
 }
