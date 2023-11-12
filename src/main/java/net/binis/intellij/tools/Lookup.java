@@ -38,6 +38,7 @@ import net.binis.intellij.util.PrototypeUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.concurrency.Promise;
 
+import java.lang.annotation.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -56,7 +57,7 @@ public class Lookup {
     private static final ThreadLocal<Boolean> registeringClass = ThreadLocal.withInitial(() -> false);
     private static final Map<String, LookupDescription> classes = new ConcurrentHashMap<>();
     private static final Map<String, PrototypeData> prototypes = new ConcurrentHashMap<>();
-    private static final Set<String> nonTemplates = Collections.synchronizedSet(new HashSet<>());
+    private static Set<String> nonTemplates = initNonTemplates();
     private static final Set<String> processing = Collections.synchronizedSet(new HashSet<>());
     private static final Map<String, String> generated = new ConcurrentHashMap<>();
     private static final Set<String> nonGenerated = Collections.synchronizedSet(new HashSet<>());
@@ -74,6 +75,21 @@ public class Lookup {
 
     public static final Map<Project, CodeGenProjectService> projects = new ConcurrentHashMap<>();
 
+    private static Set<String> initNonTemplates() {
+        var result = new HashSet<String>();
+        result.add(Target.class.getCanonicalName());
+        result.add(Retention.class.getCanonicalName());
+        result.add(Documented.class.getCanonicalName());
+        result.add(Inherited.class.getCanonicalName());
+        result.add(Repeatable.class.getCanonicalName());
+        result.add(Native.class.getCanonicalName());
+        result.add(Collections.class.getCanonicalName());
+        result.add(Map.class.getCanonicalName());
+        result.add(Set.class.getCanonicalName());
+        result.add(List.class.getCanonicalName());
+        return Collections.synchronizedSet(result);
+    }
+
     public static boolean getRegisteringTemplate() {
         return registeringTemplate.get() || registeringClass.get();
     }
@@ -86,6 +102,7 @@ public class Lookup {
                 try {
                     classes.put(name, LookupDescription.builder()
                             .cls(cls)
+                            .clsName(cls.getQualifiedName())
                             .prototype(Arrays.stream(cls.getAnnotations())
                                     .map(a -> {
                                         var data = isPrototypeAnnotation(a);
@@ -343,7 +360,7 @@ public class Lookup {
                     }
                 }
 
-                nonTemplates.add(name);
+                registerNonTemplate(name);
             } finally {
                 processing.remove(name);
             }
@@ -375,10 +392,15 @@ public class Lookup {
                     registerTemplate(cls);
                     prototypes.put(name, defaultProperties.get(name).get().build());
                 } else {
-                    nonTemplates.add(name);
+                    registerNonTemplate(name);
                 }
             }
         }
+    }
+
+    private static void registerNonTemplate(String name) {
+        log.info("Registered non-template: " + name);
+        nonTemplates.add(name);
     }
 
     public static boolean processPrototype(String name) {
@@ -398,7 +420,7 @@ public class Lookup {
                     registerTemplate(clas.get());
                     prototypes.put(name, defaultProperties.get(name).get().build());
                 } else {
-                    nonTemplates.add(name);
+                    registerNonTemplate(name);
                 }
                 return true;
             }
@@ -844,26 +866,39 @@ public class Lookup {
                                 switch (method.getName()) {
                                     case "base" -> builder.base(handleBooleanExpression(method.getDefaultValue()));
                                     case "name" -> builder.name(handleStringExpression(method.getDefaultValue()));
-                                    case "generateConstructor" -> builder.generateConstructor(handleBooleanExpression(method.getDefaultValue()));
+                                    case "generateConstructor" ->
+                                            builder.generateConstructor(handleBooleanExpression(method.getDefaultValue()));
 //                            case "options" ->
 //                                    builder.options(handleClassExpression(method.getDefaultValue().get(), Set.class));
-                                    case "interfaceName" -> builder.interfaceName(handleStringExpression(method.getDefaultValue()));
-                                    case "implementationPath" -> builder.implementationPath(handleStringExpression(method.getDefaultValue()));
+                                    case "interfaceName" ->
+                                            builder.interfaceName(handleStringExpression(method.getDefaultValue()));
+                                    case "implementationPath" ->
+                                            builder.implementationPath(handleStringExpression(method.getDefaultValue()));
                                     case "enrichers" -> handleEnrichers(builder, method.getDefaultValue());
-                                    case "inheritedEnrichers" -> handleInheritedEnrichers(builder, method.getDefaultValue());
-                                    case "interfaceSetters" -> builder.interfaceSetters(handleBooleanExpression(method.getDefaultValue()));
-                                    case "classGetters" -> builder.classGetters(handleBooleanExpression(method.getDefaultValue()));
-                                    case "classSetters" -> builder.classSetters(handleBooleanExpression(method.getDefaultValue()));
+                                    case "inheritedEnrichers" ->
+                                            handleInheritedEnrichers(builder, method.getDefaultValue());
+                                    case "interfaceSetters" ->
+                                            builder.interfaceSetters(handleBooleanExpression(method.getDefaultValue()));
+                                    case "classGetters" ->
+                                            builder.classGetters(handleBooleanExpression(method.getDefaultValue()));
+                                    case "classSetters" ->
+                                            builder.classSetters(handleBooleanExpression(method.getDefaultValue()));
 //                            case "baseModifierClass" ->
 //                                    builder.baseModifierClass(handleClassExpression(method.getDefaultValue().get()));
 //                            case "mixInClass" ->
 //                                    builder.mixInClass(handleClassExpression(method.getDefaultValue().get()));
-                                    case "interfacePath" -> builder.interfacePath(handleStringExpression(method.getDefaultValue()));
-                                    case "generateInterface" -> builder.generateInterface(handleBooleanExpression(method.getDefaultValue()));
-                                    case "basePath" -> builder.basePath(handleStringExpression(method.getDefaultValue()));
-                                    case "generateImplementation" -> builder.generateImplementation(handleBooleanExpression(method.getDefaultValue()));
-                                    case "implementationPackage" -> builder.classPackage(handleStringExpression(method.getDefaultValue()));
-                                    case "strategy" -> builder.strategy(handleEnumExpression(method.getDefaultValue(), GenerationStrategy.class));
+                                    case "interfacePath" ->
+                                            builder.interfacePath(handleStringExpression(method.getDefaultValue()));
+                                    case "generateInterface" ->
+                                            builder.generateInterface(handleBooleanExpression(method.getDefaultValue()));
+                                    case "basePath" ->
+                                            builder.basePath(handleStringExpression(method.getDefaultValue()));
+                                    case "generateImplementation" ->
+                                            builder.generateImplementation(handleBooleanExpression(method.getDefaultValue()));
+                                    case "implementationPackage" ->
+                                            builder.classPackage(handleStringExpression(method.getDefaultValue()));
+                                    case "strategy" ->
+                                            builder.strategy(handleEnumExpression(method.getDefaultValue(), GenerationStrategy.class));
                                     default -> builder.custom(method.getName(), method.getDefaultValue());
                                 }
                             });
@@ -872,6 +907,7 @@ public class Lookup {
                 });
                 prototypes.clear();
                 classes.clear();
+                nonTemplates = initNonTemplates();
             } finally {
                 registeringTemplate.set(false);
             }
@@ -1108,6 +1144,37 @@ public class Lookup {
     public static class LookupDescription {
         private PrototypeData prototype;
         private PsiClass cls;
+        private String clsName;
+
+        public PsiClass getCls() {
+            if (nonNull(cls)) {
+                if (!cls.isValid()) {
+                    log.warn("Found invalid class '" + clsName + "' Attempting to recover!");
+                    var found = findClass(clsName);
+                    if (found.isPresent()) {
+                        cls = found.get();
+                        return cls;
+                    } else {
+                        cls = null;
+                        log.warn("Invalid class recovery failed'" + clsName + "' Clearing cache!");
+                        classes.remove(clsName);
+                        return null;
+                    }
+                } else {
+                    return cls;
+                }
+            }
+            return null;
+        }
+
+        public void setCls(PsiClass cls) {
+            this.cls = cls;
+            if (nonNull(cls)) {
+                clsName = cls.getQualifiedName();
+            } else {
+                clsName = null;
+            }
+        }
 
         public boolean isPrototype() {
             return nonNull(prototype);
