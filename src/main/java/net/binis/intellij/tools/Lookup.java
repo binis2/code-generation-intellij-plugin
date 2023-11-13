@@ -226,9 +226,9 @@ public class Lookup {
                 var value = ann.findAttributeValue("value");
                 if (value instanceof PsiLiteralExpression exp) {
                     var proto = (String) exp.getValue();
+                    findClass(proto).ifPresent(Lookup::registerClass);
                     generated.put(name, proto);
                     log.info("Registered generated class: " + name);
-                    findClass(proto).ifPresent(Lookup::registerClass);
                     return true;
                 }
             }
@@ -360,8 +360,6 @@ public class Lookup {
                         }
                     }
                 }
-
-                registerNonTemplate(name);
             } finally {
                 processing.remove(name);
             }
@@ -902,6 +900,7 @@ public class Lookup {
                 });
                 prototypes.clear();
                 classes.clear();
+                generated.clear();
                 nonTemplates = initNonTemplates();
             } finally {
                 registeringTemplate.set(false);
