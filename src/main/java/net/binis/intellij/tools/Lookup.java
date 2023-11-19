@@ -102,7 +102,6 @@ public class Lookup {
                 registeringClass.set(true);
                 try {
                     classes.put(name, LookupDescription.builder()
-                            .cls(cls)
                             .clsName(cls.getQualifiedName())
                             .prototype(Arrays.stream(cls.getAnnotations())
                                     .map(a -> {
@@ -252,7 +251,7 @@ public class Lookup {
         if (nonNull(proto)) {
             var cls = classes.get(proto);
             if (nonNull(cls)) {
-                return cls.cls;
+                return findClass(cls.clsName).orElse(null);
             }
         }
 
@@ -1137,38 +1136,7 @@ public class Lookup {
     @Data
     public static class LookupDescription {
         private PrototypeData prototype;
-        private PsiClass cls;
         private String clsName;
-
-        public PsiClass getCls() {
-            if (nonNull(cls)) {
-                if (!cls.isValid()) {
-                    log.warn("Found invalid class '" + clsName + "' Attempting to recover!");
-                    var found = findClass(clsName);
-                    if (found.isPresent()) {
-                        cls = found.get();
-                        return cls;
-                    } else {
-                        cls = null;
-                        log.warn("Invalid class recovery failed'" + clsName + "' Clearing cache!");
-                        classes.remove(clsName);
-                        return null;
-                    }
-                } else {
-                    return cls;
-                }
-            }
-            return null;
-        }
-
-        public void setCls(PsiClass cls) {
-            this.cls = cls;
-            if (nonNull(cls)) {
-                clsName = cls.getQualifiedName();
-            } else {
-                clsName = null;
-            }
-        }
 
         public boolean isPrototype() {
             return nonNull(prototype);
