@@ -222,7 +222,7 @@ public class CodeGenAnnotator implements Annotator {
             // ignore
         } catch (ProcessCanceledException e) {
             throw e;
-        } catch (NullPointerException | PsiInvalidElementAccessException e) {
+        } catch (Exception e) {
             log.warn(e);
         }
     }
