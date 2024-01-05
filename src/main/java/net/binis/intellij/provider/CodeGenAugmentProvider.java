@@ -12,6 +12,7 @@ import com.intellij.psi.impl.light.LightFieldBuilder;
 import com.intellij.psi.impl.light.LightMethodBuilder;
 import com.intellij.psi.impl.light.LightModifierList;
 import com.intellij.psi.impl.source.PsiAnnotationMethodImpl;
+import com.intellij.psi.impl.source.PsiExtensibleClass;
 import net.binis.intellij.CodeGenAnnotator;
 import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
@@ -125,21 +126,24 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                                             case FIELD -> {
                                                 if (StringUtils.isNotBlank(data.getName()) && StringUtils.isNotBlank(data.getType())) {
                                                     var field = createField(cls, data);
-                                                    field.putUserData(AUGMENTED, field.getName());
-                                                    result.add(field);
+                                                    if (nonNull(field)) {
+                                                        result.add(field);
+                                                    }
                                                 }
                                             }
                                             case METHOD -> {
                                                 if (StringUtils.isNotBlank(data.getName()) && StringUtils.isNotBlank(data.getType())) {
                                                     var method = createMethod(cls, data, false);
-                                                    method.putUserData(AUGMENTED, method.getName());
-                                                    result.add(method);
+                                                    if (nonNull(method)) {
+                                                        result.add(method);
+                                                    }
                                                 }
                                             }
                                             case CONSTRUCTOR -> {
                                                 var constructor = createMethod(cls, data, true);
-                                                constructor.putUserData(AUGMENTED, constructor.getName());
-                                                result.add(constructor);
+                                                if (nonNull(constructor)) {
+                                                    result.add(constructor);
+                                                }
                                             }
                                         }
                                     })
@@ -149,6 +153,13 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
     }
 
     protected PsiMethod createMethod(PsiClass cls, EnricherData data, boolean constructor) {
+        var methods = (cls instanceof PsiExtensibleClass ext ? ext.getOwnMethods().stream() : Arrays.stream(cls.getMethods()))
+                .filter(m -> m.isConstructor() == constructor);
+
+        if (!constructor) {
+            methods = methods.filter(m -> m.getName().equals(data.getName()));
+        }
+
         var builder = new LightMethodBuilder(cls.getManager(), JavaLanguage.INSTANCE, constructor ? cls.getName() : data.getName());
         builder.setConstructor(constructor);
         builder.setContainingClass(cls);
@@ -161,6 +172,21 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
         with(data.getParameters(), params ->
                 params.forEach(param ->
                         builder.addParameter(param.getName(), param.getType())));
+
+        if (methods.filter(m -> (m.hasParameters() ? m.getParameters().length : 0) == builder.getParameterList().getParametersCount()).anyMatch(m -> {
+            for (var i = 0; i < builder.getParameterList().getParametersCount(); i++) {
+                var param = m.getParameters()[i];
+                var dataParam = builder.getParameterList().getParameter(i);
+                if (!dataParam.getType().getPresentableText().equals(((PsiType) param.getType()).getPresentableText())) {
+                    return false;
+                }
+            }
+            return true;
+        })) {
+            return null;
+        }
+
+        builder.putUserData(AUGMENTED, builder.getName());
 
         return builder;
     }
@@ -182,12 +208,18 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
     }
 
     protected PsiField createField(PsiClass cls, EnricherData data) {
-        var manager = cls.getContainingFile().getManager();
-        var list = new LightModifierList(manager);
-        var field = new LightFieldBuilder(data.getName(), data.getType(), cls).setModifierList(list);
-        field.setContainingClass(cls);
-        handleModifiers(list, data.getModifier());
-        return field;
+        if ((cls instanceof PsiExtensibleClass ext ? ext.getOwnFields().stream() : Arrays.stream(cls.getFields()))
+                .noneMatch(f -> f.getName().equals(data.getName()))) {
+
+            var manager = cls.getContainingFile().getManager();
+            var list = new LightModifierList(manager);
+            var field = new LightFieldBuilder(data.getName(), data.getType(), cls).setModifierList(list);
+            field.setContainingClass(cls);
+            handleModifiers(list, data.getModifier());
+            return field;
+        } else {
+            return null;
+        }
     }
 
     private void handleModifiers(LightModifierList builder, long modifier) {
