@@ -12,6 +12,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
+import net.binis.codegen.annotation.augment.AugmentTargetType;
 import net.binis.codegen.generation.core.interfaces.PrototypeData;
 import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
@@ -129,7 +130,7 @@ public class CodeGenAnnotator implements Annotator {
                 if (element instanceof PsiClass cls) {
                     var data = Lookup.getPrototypeData(cls);
                     if (nonNull(data)) {
-                        var augments = calcAugments(data);
+                        var augments = calcAugments(element, data);
                         var intf = Lookup.getGeneratedName(cls);
                         var intfCls = Lookup.findClass(intf);
                         var ident = Lookup.findIdentifier(cls);
@@ -229,7 +230,7 @@ public class CodeGenAnnotator implements Annotator {
 
     private void calcGenerationStrategy(@NotNull PsiElement element, @NotNull AnnotationHolder holder, PsiJavaCodeReferenceElement ref, PrototypeData data) {
         if (checkForErrors(data, element, ref, holder)) {
-            var augments = calcAugments(data);
+            var augments = calcAugments(element, data);
             var tooltip = "Generation strategy: " + (Lookup.isEnum(data) ? "Enum" : data.getStrategy().name());
             if (StringUtils.isNotBlank(augments)) {
                 tooltip += "<br>" + augments;
@@ -242,13 +243,36 @@ public class CodeGenAnnotator implements Annotator {
     }
 
     @SuppressWarnings("unchecked")
-    private String calcAugments(PrototypeData proto) {
+    protected String calcAugments(PsiElement element, PrototypeData proto) {
         return withRes((List<EnricherData>) proto.getCustom().get("enrichers"), list ->
                 list.stream()
                         .filter(data -> nonNull(data.getAdds()))
-                        .map(EnricherData::getDescription)
+                        .map(data -> getElementDescription(element, data))
                         .filter(StringUtils::isNotBlank)
                         .collect(Collectors.joining("<br>")));
+    }
+
+    protected String getElementDescription(PsiElement element, EnricherData data) {
+        if (element instanceof PsiClass cls) {
+            var idx = data.getTargets().indexOf(cls.isInterface() ? AugmentTargetType.INTERFACE : cls.isEnum() ? AugmentTargetType.ENUM : AugmentTargetType.CLASS);
+            if (idx > -1 && idx < data.getDescription().size()) {
+                return data.getDescription().get(idx);
+            }
+        }
+        if (element instanceof PsiField) {
+            var idx = data.getTargets().indexOf(AugmentTargetType.FIELD);
+            if (idx > -1 && idx < data.getDescription().size()) {
+                return data.getDescription().get(idx);
+            }
+        }
+        if (element instanceof PsiMethod method) {
+            var idx = data.getTargets().indexOf(method.isConstructor() ? AugmentTargetType.CONSTRUCTOR : AugmentTargetType.METHOD);
+            if (idx > -1 && idx < data.getDescription().size()) {
+                return data.getDescription().get(idx);
+            }
+        }
+
+        return data.getDescription().get(0);
     }
 
     protected void calcEnumTooltip(PsiElement element, PsiField field, AnnotationHolder holder, PsiClass cls, PsiClass proto, PrototypeData dta) {

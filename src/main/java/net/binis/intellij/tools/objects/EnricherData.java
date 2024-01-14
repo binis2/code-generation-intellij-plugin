@@ -34,7 +34,7 @@ public class EnricherData {
     protected Function<PsiClass, Stream<PsiParameter>> filter;
     protected Interpolator suppresses;
     protected Interpolator paramsSuppresses;
-    protected String description;
+    protected List<String> description;
 
     @Data
     @Builder

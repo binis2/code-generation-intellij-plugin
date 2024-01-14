@@ -680,7 +680,7 @@ public class Lookup {
                     }
                     case "description" -> {
                         if (attr.getAttributeValue() instanceof JvmAnnotationConstantValue exp && exp.getConstantValue() instanceof String value && StringUtils.isNotBlank(value)) {
-                            result.description(value);
+                            result.description(Arrays.asList(value.split("\\|")));
                         }
                     }
                     case "modifier" -> {

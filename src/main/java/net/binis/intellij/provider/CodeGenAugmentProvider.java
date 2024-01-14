@@ -1,6 +1,7 @@
 package net.binis.intellij.provider;
 
 import com.intellij.lang.java.JavaLanguage;
+import com.intellij.lang.jvm.JvmModifier;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.DumbService;
@@ -13,6 +14,7 @@ import com.intellij.psi.impl.light.LightMethodBuilder;
 import com.intellij.psi.impl.light.LightModifierList;
 import com.intellij.psi.impl.source.PsiAnnotationMethodImpl;
 import com.intellij.psi.impl.source.PsiExtensibleClass;
+import net.binis.codegen.generation.core.Helpers;
 import net.binis.intellij.CodeGenAnnotator;
 import net.binis.intellij.tools.Binis;
 import net.binis.intellij.tools.Lookup;
@@ -23,6 +25,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Modifier;
 import java.util.*;
+import java.util.stream.Stream;
 
 import static com.intellij.openapi.util.NullUtils.notNull;
 import static java.util.Objects.isNull;
@@ -145,6 +148,20 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
                                                     result.add(constructor);
                                                 }
                                             }
+                                            case GETTER ->
+                                                getFields(cls).forEach(f -> {
+                                                    var method = createGetter(cls, f);
+                                                    if (nonNull(method)) {
+                                                        result.add(method);
+                                                    }
+                                                });
+                                            case SETTER ->
+                                                    getFields(cls).filter(f -> !f.hasModifier(JvmModifier.STATIC)).forEach(f -> {
+                                                        var method = createSetter(cls, f);
+                                                        if (nonNull(method)) {
+                                                            result.add(method);
+                                                        }
+                                                    });
                                         }
                                     })
 
@@ -153,7 +170,7 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
     }
 
     protected PsiMethod createMethod(PsiClass cls, EnricherData data, boolean constructor) {
-        var methods = (cls instanceof PsiExtensibleClass ext ? ext.getOwnMethods().stream() : Arrays.stream(cls.getMethods()))
+        var methods = getMethods(cls)
                 .filter(m -> m.isConstructor() == constructor);
 
         if (!constructor) {
@@ -191,10 +208,56 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
         return builder;
     }
 
+    protected PsiMethod createGetter(PsiClass cls, PsiField field) {
+        var name = Helpers.getGetterName(field.getName(), field.getType().getCanonicalText());
+
+        if (getMethods(cls).filter(m -> !m.hasParameters()).noneMatch(m -> m.getName().equals(name))) {
+            var builder = new LightMethodBuilder(cls.getManager(), JavaLanguage.INSTANCE, name);
+            builder.setContainingClass(cls);
+            builder.setNavigationElement(cls);
+            builder.setMethodReturnType(field.getType());
+            builder.addModifier(PsiModifier.PUBLIC);
+
+            builder.putUserData(AUGMENTED, builder.getName());
+            return builder;
+        } else {
+            return null;
+        }
+    }
+
+    protected PsiMethod createSetter(PsiClass cls, PsiField field) {
+        var name = Helpers.getSetterName(field.getName());
+        if (getMethods(cls)
+                .filter(PsiMethod::hasParameters)
+                .filter(m -> m.getParameterList().getParametersCount() == 1)
+                .filter(m -> m.getParameterList().getParameter(0).getType().getCanonicalText().equals(field.getType().getCanonicalText()))
+                .noneMatch(m -> m.getName().equals(name))) {
+            var builder = new LightMethodBuilder(cls.getManager(), JavaLanguage.INSTANCE, name);
+            builder.setContainingClass(cls);
+            builder.setNavigationElement(cls);
+            builder.addModifier(PsiModifier.PUBLIC);
+            builder.setMethodReturnType(PsiTypes.voidType());
+            builder.addParameter(field.getName(), field.getType());
+
+            builder.putUserData(AUGMENTED, builder.getName());
+            return builder;
+        } else {
+            return null;
+        }
+    }
+
+    protected Stream<PsiMethod> getMethods(PsiClass cls) {
+        return (cls instanceof PsiExtensibleClass ext ? ext.getOwnMethods().stream() : Arrays.stream(cls.getMethods()));
+    }
+
+    protected Stream<PsiField> getFields(PsiClass cls) {
+        return (cls instanceof PsiExtensibleClass ext ? ext.getOwnFields().stream() : Arrays.stream(cls.getFields()));
+    }
+
     protected boolean filterByType(EnricherData data, Class<? extends PsiElement> type) {
         return switch (data.getAdds()) {
             case FIELD -> PsiField.class.isAssignableFrom(type);
-            case METHOD, CONSTRUCTOR -> PsiMethod.class.isAssignableFrom(type);
+            case METHOD, CONSTRUCTOR, GETTER, SETTER -> PsiMethod.class.isAssignableFrom(type);
             default -> false;
         };
     }
@@ -208,9 +271,7 @@ public class CodeGenAugmentProvider extends PsiAugmentProvider {
     }
 
     protected PsiField createField(PsiClass cls, EnricherData data) {
-        if ((cls instanceof PsiExtensibleClass ext ? ext.getOwnFields().stream() : Arrays.stream(cls.getFields()))
-                .noneMatch(f -> f.getName().equals(data.getName()))) {
-
+        if (getFields(cls).noneMatch(f -> f.getName().equals(data.getName()))) {
             var manager = cls.getContainingFile().getManager();
             var list = new LightModifierList(manager);
             var field = new LightFieldBuilder(data.getName(), data.getType(), cls).setModifierList(list);
