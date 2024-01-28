@@ -337,9 +337,20 @@ public class CodeGenAnnotator implements Annotator {
                 with(data.getTargets(), targets -> {
                     var valid = targets.isEmpty();
                     for (var target : targets) {
-                        if (target.equals(type)) {
+                        PsiType targetType = null;
+                        try {
+                            targetType = PsiType.getTypeByName(target, method.getProject(), method.getResolveScope());
+                        } catch (Exception e) {
+                            //Do nothing
+                        }
+                        if (nonNull(targetType) && targetType.isAssignableFrom(method.getReturnType())) {
                             valid = true;
                             break;
+                        } else {
+                            if (target.equals(type)) {
+                                valid = true;
+                                break;
+                            }
                         }
                     }
 
