@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.binis.intellij"
-version = "1.2.5"
+version = "1.2.13"
 
 repositories {
     mavenLocal()
@@ -13,13 +13,13 @@ repositories {
 }
 
 dependencies {
-    implementation("dev.binis:code-generator:1.2.5")
+    implementation("dev.binis:code-generator:1.2.13")
 }
 
 // Configure Gradle IntelliJ Plugin
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
 intellij {
-    version.set("2023.3")
+    version.set("2024.1")
     type.set("IC") // Target IDE Platform
 
     plugins.set(listOf("com.intellij.java"))
@@ -33,8 +33,8 @@ tasks {
     }
 
     patchPluginXml {
-        sinceBuild.set("233")
-        untilBuild.set("233.*")
+        sinceBuild.set("241")
+        untilBuild.set("241.*")
     }
 
     signPlugin {
