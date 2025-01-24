@@ -233,7 +233,7 @@ public class CodeGenAnnotator implements Annotator {
             var augments = calcAugments(element, data);
             var tooltip = "Generation strategy: " + (Lookup.isEnum(data) ? "Enum" : data.getStrategy().name());
             if (StringUtils.isNotBlank(augments)) {
-                tooltip += "<br>" + augments;
+                tooltip = augments + "<br>" + tooltip;
             }
             var range = element.getTextRange();
             holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
@@ -244,12 +244,23 @@ public class CodeGenAnnotator implements Annotator {
 
     @SuppressWarnings("unchecked")
     protected String calcAugments(PsiElement element, PrototypeData proto) {
-        return withRes((List<EnricherData>) proto.getCustom().get("enrichers"), list ->
+        var result = new StringBuilder();
+        if (element instanceof PsiAnnotatedJavaCodeReferenceElement ref) {
+            var el = Lookup.findClass(ref.getQualifiedName());
+            if (el.isPresent()) {
+                var ann = el.get().getAnnotation("net.binis.codegen.annotation.CodeDocumentation");
+                if (nonNull(ann) && ann.findAttributeValue("value") instanceof PsiLiteralExpression literal && literal.getValue() instanceof String value) {
+                    result.append(value.replace("\n", "<br>")).append("<br>");
+                }
+            }
+        }
+        result.append((String) withRes((List<EnricherData>) proto.getCustom().get("enrichers"), list ->
                 list.stream()
                         .filter(data -> nonNull(data.getAdds()))
                         .map(data -> getElementDescription(element, data))
                         .filter(StringUtils::isNotBlank)
-                        .collect(Collectors.joining("<br>")));
+                        .collect(Collectors.joining("<hr>"))));
+        return result.toString();
     }
 
     protected String getElementDescription(PsiElement element, EnricherData data) {
