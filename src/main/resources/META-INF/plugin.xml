@@ -66,4 +66,11 @@
         <listener class="net.binis.intellij.listeners.CodeGenManagerListener"
                   topic="com.intellij.openapi.project.ProjectManagerListener"/>
     </applicationListeners>
+    <change-notes>
+        <![CDATA[
+      <ul>
+        <li><b>1.2.23.1</b> Updated for Intellij 2025.1</li>
+      </ul>
+    ]]>
+    </change-notes>
 </idea-plugin>
