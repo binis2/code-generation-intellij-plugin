@@ -3,6 +3,7 @@ package net.binis.intellij;
 import com.intellij.lang.annotation.AnnotationHolder;
 import com.intellij.lang.annotation.Annotator;
 import com.intellij.lang.annotation.HighlightSeverity;
+import com.intellij.lang.jvm.annotation.JvmAnnotationClassValue;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors;
 import com.intellij.openapi.progress.ProcessCanceledException;
@@ -21,10 +22,7 @@ import net.binis.intellij.util.PrototypeUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.isNull;
@@ -38,90 +36,6 @@ public class CodeGenAnnotator implements Annotator {
     private final Logger log = Logger.getInstance(CodeGenAnnotator.class);
 
     private static final Key<Void> GENERATED_KEY = Key.create("binis.generated");
-
-    private static final Set<String> HIGHLIGHT_METHODS = initHighlightMethods();
-
-    private static Set<String> initHighlightMethods() {
-        var result = new HashSet<String>();
-
-        result.add("create");
-        result.add("find");
-        result.add("with");
-        result.add("done");
-        result.add("by");
-        result.add("and");
-        result.add("or");
-        result.add("in");
-        result.add("order");
-        result.add("asc");
-        result.add("desc");
-        result.add("where");
-        result.add("merge");
-        result.add("as");
-        result.add("sum");
-        result.add("min");
-        result.add("max");
-        result.add("count");
-        result.add("avg");
-        result.add("distinct");
-        result.add("group");
-        result.add("_add");
-        result.add("_add$");
-        result.add("_and");
-        result.add("_if");
-        result.add("_self");
-        result.add("_map");
-        result.add("save");
-        result.add("delete");
-        result.add("join");
-        result.add("joinFetch");
-        result.add("leftJoin");
-        result.add("leftJoinFetch");
-        result.add("ensure");
-        result.add("reference");
-        result.add("references");
-        result.add("get");
-        result.add("list");
-        result.add("top");
-        result.add("page");
-        result.add("paginated");
-        result.add("paged");
-        result.add("tuple");
-        result.add("tuples");
-        result.add("prepare");
-        result.add("projection");
-        result.add("flush");
-        result.add("lock");
-        result.add("hint");
-        result.add("filter");
-        result.add("exists");
-        result.add("notExists");
-        result.add("remove");
-        result.add("run");
-        result.add("transaction");
-        result.add("size");
-        result.add("contains");
-        result.add("notContains");
-        result.add("containsAll");
-        result.add("containsOne");
-        result.add("containsNone");
-        result.add("isEmpty");
-        result.add("isNotEmpty");
-        result.add("builder");
-        result.add("build");
-        result.add("_remove");
-        result.add("_clear");
-        result.add("_each");
-        result.add("_ifEmpty");
-        result.add("_ifNotEmpty");
-        result.add("_ifContains");
-        result.add("_ifNotContains");
-        result.add("_find");
-        result.add("_findAll");
-        result.add("_stream");
-
-        return result;
-    }
 
     @Override
     public void annotate(@NotNull final PsiElement element, @NotNull AnnotationHolder holder) {
@@ -196,12 +110,20 @@ public class CodeGenAnnotator implements Annotator {
                                     checkForValidationErrors(valid, ref, ann, holder);
                                 }
                             } else {
+                                if (element instanceof PsiReferenceExpression exp) {
+                                    var root = Lookup.ROUTINES.get(exp.getQualifiedName());
+                                    if (nonNull(root)) {
+                                        var range = new TextRange(exp.getTextOffset(), exp.getTextOffset() + exp.getReferenceName().length());
+                                        holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                                                .range(range).textAttributes(DefaultLanguageHighlighterColors.KEYWORD).create();
+                                    }
+                                }
                                 var resolved = ref.resolve();
                                 if (resolved instanceof PsiField field && field.getParent() instanceof PsiClass cls && Lookup.isGenerated(cls.getQualifiedName())) {
                                     with(Lookup.getPrototypeClass(cls.getQualifiedName()), proto ->
                                             with(Lookup.getPrototypeData(proto), dta ->
-                                                    condition(Lookup.isEnum(dta), () ->
-                                                            calcEnumTooltip(element, field, holder, cls, proto, dta))));
+                                                    condition(proto.isEnum(), () ->
+                                                            calcEnumTooltip(element, field, holder, cls, proto))));
                                 }
                             }
                         }
@@ -211,7 +133,7 @@ public class CodeGenAnnotator implements Annotator {
                     if (nonNull(root)) {
                         var r = exp.getMethodExpression();
                         var name = r.getReferenceName();
-                        if (HIGHLIGHT_METHODS.contains(name)) {
+                        if (root.methods().contains(name)) {
                             var range = new TextRange(r.getTextOffset(), r.getTextOffset() + name.length());
                             holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
                                     .range(range).textAttributes(DefaultLanguageHighlighterColors.KEYWORD).create();
@@ -219,11 +141,14 @@ public class CodeGenAnnotator implements Annotator {
                     }
                 }
             }
-        } catch (IndexNotReadyException e) {
+        } catch (
+                IndexNotReadyException e) {
             // ignore
-        } catch (ProcessCanceledException e) {
+        } catch (
+                ProcessCanceledException e) {
             throw e;
-        } catch (Exception e) {
+        } catch (
+                Exception e) {
             log.warn(e);
         }
     }
@@ -286,38 +211,61 @@ public class CodeGenAnnotator implements Annotator {
         return data.getDescription().get(0);
     }
 
-    protected void calcEnumTooltip(PsiElement element, PsiField field, AnnotationHolder holder, PsiClass cls, PsiClass proto, PrototypeData dta) {
+    protected void calcEnumTooltip(PsiElement element, PsiField field, AnnotationHolder holder, PsiClass cls, PsiClass proto) {
         try {
-            with(PsiTreeUtil.getChildOfType(PsiTreeUtil.getContextOfType(PsiTreeUtil.getChildOfType(field.getInitializer(), PsiReferenceExpression.class), PsiMethodCallExpression.class), PsiExpressionList.class), values -> {
-                var impl = Lookup.findClass(PsiTreeUtil.getChildOfType((PsiElement) cls.getAnnotation("net.binis.codegen.annotation.Default").getAttributes().get(0), PsiLiteralExpression.class).getValue().toString()).get();
-                var paramNames = impl.getConstructors()[0].getParameterList();
-                var expressions = values.getExpressions();
+            var context = field.getInitializer() instanceof PsiMethodCallExpression ? field.getInitializer() : PsiTreeUtil.getChildOfType(field.getInitializer(), PsiMethodCallExpression.class);
+            if (nonNull(context)) {
+                with(PsiTreeUtil.getChildOfType(context, PsiExpressionList.class), values -> {
+                    var impl = Lookup.findClass(PsiTreeUtil.getChildOfType((PsiElement) cls.getAnnotation("net.binis.codegen.annotation.Default").getAttributes().get(0), PsiLiteralExpression.class).getValue().toString()).get();
+                    var paramNames = impl.getConstructors()[0].getParameterList();
+                    var expressions = new ArrayList<>(Arrays.asList(values.getExpressions()));
 
-                var tooltip = new StringBuilder();
+                    var tooltip = new StringBuilder();
 
-                tooltip.append("<b>Enum value:</b> <a href=\"#navigation/")
-                        .append(proto.getContainingFile().getVirtualFile().getCanonicalPath()).append(":")
-                        .append(Arrays.stream(proto.getFields()).filter(f -> f.getName().equals(field.getName())).findFirst().get().getTextOffset())
-                        .append("\">").append(((PsiLiteralExpression) expressions[1]).getValue().toString())
-                        .append("</a><br/>")
-                        .append("<b>Ordinal value:</b> ")
-                        .append(expressions[2].getText())
-                        .append("<br/>");
-
-                for (var i = 2; i < paramNames.getParametersCount(); i++) {
-                    tooltip.append("<b>")
-                            .append(paramNames.getParameters()[i].getName())
-                            .append(":</b> ")
-                            .append(expressions[i + 1].getText())
+                    tooltip.append("<b>Enum value:</b> <a href=\"#navigation/")
+                            .append(proto.getContainingFile().getVirtualFile().getCanonicalPath()).append(":")
+                            .append(Arrays.stream(proto.getFields()).filter(f -> f.getName().equals(field.getName())).findFirst().get().getTextOffset())
+                            .append("\">").append(((PsiLiteralExpression) expressions.get(1)).getValue().toString())
+                            .append("</a><br/>")
+                            .append("<b>Ordinal value:</b> ")
+                            .append(expressions.get(2).getText())
                             .append("<br/>");
-                }
 
-                var range = element.getTextRange();
-                holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
-                        .tooltip(tooltip.toString())
-                        .range(range).create();
+                    var array = PsiTreeUtil.getChildOfType(expressions.get(3), PsiArrayInitializerExpression.class);
+                    if (nonNull(array)) {
+                        expressions.remove(3);
+                        expressions.addAll(Arrays.asList(array.getInitializers()));
+                    }
 
-            });
+                    for (var i = 2; i < paramNames.getParametersCount(); i++) {
+                        tooltip.append("<b>")
+                                .append(paramNames.getParameters()[i].getName())
+                                .append(":</b> ")
+                                .append(expressions.get(i + 1).getText())
+                                .append("<br/>");
+                    }
+
+                    var range = element.getTextRange();
+                    holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
+                            .tooltip(tooltip.toString())
+                            .range(range).create();
+
+                });
+            } else {
+                with(field.getInitializer() instanceof PsiReferenceExpression re ? re : PsiTreeUtil.getChildOfType(field.getInitializer(), PsiReferenceExpression.class), ctx ->
+                        with(((PsiClass) ((PsiReference) ctx.getQualifier()).resolve()), c ->
+                                with(c.findFieldByName(ctx.getReferenceName(), true), f ->
+                                        with(c.getAnnotation("net.binis.codegen.annotation.Generated"), a ->
+                                                with(PsiTreeUtil.getChildOfType((PsiElement) a.getAttributes().get(0), PsiLiteralExpression.class), p ->
+                                                        Lookup.findClass(p.getValue().toString()).ifPresent(pr -> {
+
+                                                            var ff = f;
+                                                            if (!f.hasInitializer()) {
+                                                                ff = JavaPsiFacade.getElementFactory(f.getProject()).createFieldFromText(f.getText(), null);
+                                                            }
+                                                            calcEnumTooltip(element, ff, holder, c, pr);
+                                                        }))))));
+            }
         } catch (ProcessCanceledException e) {
             throw e;
         } catch (Exception e) {

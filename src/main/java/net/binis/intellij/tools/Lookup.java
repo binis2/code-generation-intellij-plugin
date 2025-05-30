@@ -3,6 +3,7 @@ package net.binis.intellij.tools;
 import com.github.javaparser.ast.expr.Name;
 import com.intellij.lang.jvm.JvmAnnotation;
 import com.intellij.lang.jvm.annotation.JvmAnnotationArrayValue;
+import com.intellij.lang.jvm.annotation.JvmAnnotationClassValue;
 import com.intellij.lang.jvm.annotation.JvmAnnotationConstantValue;
 import com.intellij.lang.jvm.annotation.JvmNestedAnnotationValue;
 import com.intellij.openapi.diagnostic.Logger;
@@ -53,6 +54,9 @@ import static net.binis.codegen.tools.Tools.*;
 
 public class Lookup {
 
+    @Builder
+    public record Root(PsiExpression expression, Set<String> methods) {}
+
     private static final Logger log = Logger.getInstance(Lookup.class);
     private static final ThreadLocal<Boolean> registeringTemplate = ThreadLocal.withInitial(() -> false);
     private static final ThreadLocal<Boolean> registeringClass = ThreadLocal.withInitial(() -> false);
@@ -64,6 +68,10 @@ public class Lookup {
     private static final Set<String> nonGenerated = Collections.synchronizedSet(new HashSet<>());
     private static final Map<String, ValidationDescription> validators = new ConcurrentHashMap<>();
     public static final Set<String> STARTERS = Set.of("create", "with", "find", "builder");
+    public static final Map<String, Set<String>> ROUTINES = Map.of(
+            "net.binis.codegen.async.Async", Set.of("start", "flow", "delay", "lock", "execute", "collect"),
+            "net.binis.codegen.projection.Projection", Set.of("single", "list", "set"),
+            "net.binis.codegen.map.Mapper", Set.of("map", "source", "strategy", "key", "destination", "custom", "producer", "register"));
     private static final Map<String, List<String>> knownTargetAwareClasses = Map.of(
             "net.binis.codegen.validation.consts.ValidationTargets.Primitives", List.of(int.class.getCanonicalName(), long.class.getCanonicalName(), double.class.getCanonicalName(), float.class.getCanonicalName(), short.class.getCanonicalName(), byte.class.getCanonicalName(), boolean.class.getCanonicalName(), char.class.getCanonicalName()),
             "net.binis.codegen.validation.consts.ValidationTargets.Wrappers", List.of(Integer.class.getCanonicalName(), Long.class.getCanonicalName(), Double.class.getCanonicalName(), Float.class.getCanonicalName(), Short.class.getCanonicalName(), Byte.class.getCanonicalName(), Boolean.class.getCanonicalName(), Character.class.getCanonicalName()),
@@ -73,8 +81,91 @@ public class Lookup {
             "net.binis.codegen.validation.consts.ValidationTargets.Numbers", List.of(int.class.getCanonicalName(), long.class.getCanonicalName(), double.class.getCanonicalName(), float.class.getCanonicalName(), short.class.getCanonicalName(), byte.class.getCanonicalName(), Integer.class.getCanonicalName(), Long.class.getCanonicalName(), Double.class.getCanonicalName(), Float.class.getCanonicalName(), Short.class.getCanonicalName(), Byte.class.getCanonicalName())
     );
 
+    protected static final Set<String> HIGHLIGHT_METHODS = initHighlightMethods();
 
     public static final Map<Project, CodeGenProjectService> projects = new ConcurrentHashMap<>();
+
+    private static Set<String> initHighlightMethods() {
+        var result = new HashSet<String>();
+
+        result.add("create");
+        result.add("find");
+        result.add("with");
+        result.add("done");
+        result.add("by");
+        result.add("and");
+        result.add("or");
+        result.add("in");
+        result.add("order");
+        result.add("asc");
+        result.add("desc");
+        result.add("where");
+        result.add("merge");
+        result.add("as");
+        result.add("sum");
+        result.add("min");
+        result.add("max");
+        result.add("count");
+        result.add("avg");
+        result.add("distinct");
+        result.add("group");
+        result.add("_add");
+        result.add("_add$");
+        result.add("_and");
+        result.add("_if");
+        result.add("_self");
+        result.add("_map");
+        result.add("save");
+        result.add("delete");
+        result.add("join");
+        result.add("joinFetch");
+        result.add("leftJoin");
+        result.add("leftJoinFetch");
+        result.add("ensure");
+        result.add("reference");
+        result.add("references");
+        result.add("get");
+        result.add("list");
+        result.add("top");
+        result.add("page");
+        result.add("paginated");
+        result.add("paged");
+        result.add("tuple");
+        result.add("tuples");
+        result.add("prepare");
+        result.add("projection");
+        result.add("flush");
+        result.add("lock");
+        result.add("hint");
+        result.add("filter");
+        result.add("exists");
+        result.add("notExists");
+        result.add("remove");
+        result.add("run");
+        result.add("transaction");
+        result.add("size");
+        result.add("contains");
+        result.add("notContains");
+        result.add("containsAll");
+        result.add("containsOne");
+        result.add("containsNone");
+        result.add("isEmpty");
+        result.add("isNotEmpty");
+        result.add("builder");
+        result.add("build");
+        result.add("_remove");
+        result.add("_clear");
+        result.add("_each");
+        result.add("_ifEmpty");
+        result.add("_ifNotEmpty");
+        result.add("_ifContains");
+        result.add("_ifNotContains");
+        result.add("_find");
+        result.add("_findAll");
+        result.add("_stream");
+
+        return result;
+    }
 
     private static Set<String> initNonTemplates() {
         var result = new HashSet<String>();
@@ -220,7 +311,19 @@ public class Lookup {
             return true;
         }
         if (!nonGenerated.contains(name)) {
-            var ann = cls.getAnnotation("javax.annotation.processing.Generated");
+            var ann = cls.getAnnotation("net.binis.codegen.annotation.Generated");
+            if (nonNull(ann)) {
+                var value = ann.findAttributeValue("by");
+                if (value instanceof PsiLiteralExpression exp) {
+                    var proto = (String) exp.getValue();
+                    findClass(proto).ifPresent(Lookup::registerClass);
+                    generated.put(name, proto);
+                    log.info("Registered generated class: " + name);
+                    return true;
+                }
+            }
+
+            ann = cls.getAnnotation("javax.annotation.processing.Generated");
             if (nonNull(ann)) {
                 var value = ann.findAttributeValue("value");
                 if (value instanceof PsiLiteralExpression exp) {
@@ -484,10 +587,9 @@ public class Lookup {
         return name;
     }
 
-
-    public static PsiMethodCallExpression findRoot(PsiMethodCallExpression expression) {
+    public static Root findRoot(PsiMethodCallExpression expression) {
         if (STARTERS.contains(expression.getMethodExpression().getReferenceName()) && expression.getArgumentList().isEmpty()) {
-            return expression;
+            return Root.builder().expression(expression).methods(HIGHLIGHT_METHODS).build();
         }
 
         var lambda = PsiTreeUtil.getParentOfType(expression, PsiLambdaExpression.class);
@@ -507,6 +609,16 @@ public class Lookup {
                         var result = findRoot(mtd);
                         if (nonNull(result)) {
                             return result;
+                        }
+                    }
+                } else {
+                    var starts = PsiTreeUtil.getChildrenOfType(ref, PsiReferenceExpression.class);
+                    if (nonNull(starts)) {
+                        for (var start : starts) {
+                            var routines = ROUTINES.get(start.getQualifiedName());
+                            if (nonNull(routines)) {
+                                return Root.builder().expression(ref).methods(routines).build();
+                            }
                         }
                     }
                 }
