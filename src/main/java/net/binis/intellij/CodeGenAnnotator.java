@@ -121,9 +121,8 @@ public class CodeGenAnnotator implements Annotator {
                                 var resolved = ref.resolve();
                                 if (resolved instanceof PsiField field && field.getParent() instanceof PsiClass cls && Lookup.isGenerated(cls.getQualifiedName())) {
                                     with(Lookup.getPrototypeClass(cls.getQualifiedName()), proto ->
-                                            with(Lookup.getPrototypeData(proto), dta ->
                                                     condition(proto.isEnum(), () ->
-                                                            calcEnumTooltip(element, field, holder, cls, proto))));
+                                                            calcEnumTooltip(element, field, holder, cls, proto)));
                                 }
                             }
                         }
