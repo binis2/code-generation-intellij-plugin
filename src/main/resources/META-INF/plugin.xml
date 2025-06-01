@@ -61,6 +61,7 @@
         <daemon.highlightInfoFilter implementation="net.binis.intellij.filter.CodeGenHighlightErrorFilter"/>
 <!--        <lang.structureViewExtension implementation="net.binis.intellij.extension.CodeGenStructureViewExtension"/>-->
         <lang.psiAugmentProvider implementation="net.binis.intellij.provider.CodeGenAugmentProvider"/>
+        <postFormatProcessor implementation="net.binis.intellij.format.CodeGenPostFormatProcessor" />
     </extensions>
     <applicationListeners>
         <listener class="net.binis.intellij.listeners.CodeGenManagerListener"
@@ -70,6 +71,12 @@
         <![CDATA[
       <ul>
         <li><b>1.2.23.1</b> Updated for Intellij 2025.1</li>
+        <li><b>1.2.27</b> Added highlight for core routines - Async, Mapper, Projection<br>
+            Added support for mixIn enums<br>
+            Fixed errors when using constructor enrichers<br>
+            Better discovery of compiled generated classes<br>
+            Added basic formatting for generated fluent classes
+        </li>
       </ul>
     ]]>
     </change-notes>
