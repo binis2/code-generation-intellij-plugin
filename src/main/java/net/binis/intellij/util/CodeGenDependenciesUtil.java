@@ -1,7 +1,6 @@
 package net.binis.intellij.util;
 
 import com.intellij.compiler.CompilerConfiguration;
-import com.intellij.ide.plugins.cl.PluginAwareClassLoader;
 import com.intellij.ide.plugins.cl.PluginClassLoader;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
@@ -14,6 +13,8 @@ import net.binis.codegen.tools.Reflection;
 import java.io.File;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,7 +23,8 @@ import java.util.jar.JarFile;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
-import static net.binis.codegen.tools.Tools.*;
+import static net.binis.codegen.tools.Tools.condition;
+import static net.binis.codegen.tools.Tools.with;
 
 public class CodeGenDependenciesUtil {
 
@@ -56,7 +58,7 @@ public class CodeGenDependenciesUtil {
 
     protected static String getVersionFromPlugin() {
         List<URL> urls = getUrls();
-        for (URL url : urls) {
+        for (var url : urls) {
             String name = null;
             try {
                 var file = new File(url.toURI());
@@ -170,7 +172,7 @@ public class CodeGenDependenciesUtil {
                                         canonicalPath = canonicalPath.replace('/', File.separatorChar);
                                         var file = new File(canonicalPath);
                                         if (!file.isFile()) {
-                                            file = new File(new URL(path.getUrl()).getFile());
+                                            file = new File(new URI(path.getUrl()).toURL().getFile());
                                         }
 
                                         try (var jarFile = new JarFile(file.getAbsoluteFile())) {
@@ -183,7 +185,7 @@ public class CodeGenDependenciesUtil {
                                         } catch (Exception e) {
                                             e.printStackTrace();
                                         }
-                                    } catch (MalformedURLException e) {
+                                    } catch (MalformedURLException | URISyntaxException e) {
                                         e.printStackTrace();
                                     }
                                 }))));

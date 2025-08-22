@@ -77,6 +77,7 @@
             Better discovery of compiled generated classes<br>
             Added basic formatting for generated fluent classes
         </li>
+        <li><b>1.2.28</b> Updated for Intellij 2025.2</li>
       </ul>
     ]]>
     </change-notes>

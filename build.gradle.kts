@@ -1,11 +1,11 @@
 plugins {
     id("java")
-    id("org.jetbrains.intellij.platform") version "2.6.0"
+    id("org.jetbrains.intellij.platform") version "2.7.2"
     id("io.freefair.lombok") version "8.13.1"
 }
 
 group = "net.binis.intellij"
-version = "1.2.27"
+version = "1.2.28"
 
 repositories {
     mavenLocal()
@@ -17,9 +17,9 @@ repositories {
 }
 
 dependencies {
-    implementation("dev.binis:code-generator:1.2.27")
+    implementation("dev.binis:code-generator:1.2.28")
     intellijPlatform {
-        intellijIdeaCommunity("2025.1")
+        intellijIdeaCommunity("2025.2")
         bundledPlugin("com.intellij.java")
     }
 }
@@ -29,7 +29,7 @@ intellijPlatform {
 
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "251"
+            sinceBuild = "252"
         }
     }
     pluginVerification  {
