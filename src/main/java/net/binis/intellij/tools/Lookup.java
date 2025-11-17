@@ -592,14 +592,6 @@ public class Lookup {
             return Root.builder().expression(expression).methods(HIGHLIGHT_METHODS).build();
         }
 
-        var lambda = PsiTreeUtil.getParentOfType(expression, PsiLambdaExpression.class);
-        if (nonNull(lambda)) {
-            var mtd = PsiTreeUtil.getParentOfType(lambda, PsiMethodCallExpression.class);
-            if (nonNull(mtd)) {
-                expression = mtd;
-            }
-        }
-
         var refs = PsiTreeUtil.getChildrenOfType(expression, PsiReferenceExpression.class);
         if (nonNull(refs)) {
             for (var ref : refs) {
@@ -624,6 +616,15 @@ public class Lookup {
                 }
             }
         }
+
+        var lambda = PsiTreeUtil.getParentOfType(expression, PsiLambdaExpression.class);
+        if (nonNull(lambda)) {
+            var mtd = PsiTreeUtil.getParentOfType(lambda, PsiMethodCallExpression.class);
+            if (nonNull(mtd)) {
+                return findRoot(mtd);
+            }
+        }
+
         return null;
     }
 

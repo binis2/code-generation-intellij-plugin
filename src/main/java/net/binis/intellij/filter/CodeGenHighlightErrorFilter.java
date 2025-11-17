@@ -53,7 +53,7 @@ public class CodeGenHighlightErrorFilter implements HighlightInfoFilter {
                     }
                 }
 
-                return isNull(cls) || !cls.isAnnotationType() || !"@interface may not have extends list".equals(highlightInfo.getDescription());
+                return isNull(cls) || !cls.isAnnotationType() || !"'extends' not allowed on @interface".equals(highlightInfo.getDescription());
             }
         } catch (IndexNotReadyException e) {
             //Ignore

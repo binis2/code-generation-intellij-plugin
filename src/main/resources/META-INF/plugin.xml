@@ -70,14 +70,18 @@
     <change-notes>
         <![CDATA[
       <ul>
-        <li><b>1.2.23.1</b> Updated for Intellij 2025.1</li>
+        <li><b>1.2.32</b>Rewritten formatting routine to better support nested structures<br>
+            Improved known method highlighting.
+            Fixed wring changed error suppression on extended annotations.
+        </li>
+        <li><b>1.2.28</b> Updated for Intellij 2025.2</li>
         <li><b>1.2.27</b> Added highlight for core routines - Async, Mapper, Projection<br>
             Added support for mixIn enums<br>
             Fixed errors when using constructor enrichers<br>
             Better discovery of compiled generated classes<br>
             Added basic formatting for generated fluent classes
         </li>
-        <li><b>1.2.28</b> Updated for Intellij 2025.2</li>
+        <li><b>1.2.23.1</b> Updated for Intellij 2025.1</li>
       </ul>
     ]]>
     </change-notes>
