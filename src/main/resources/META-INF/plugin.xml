@@ -70,8 +70,8 @@
     <change-notes>
         <![CDATA[
       <ul>
-        <li><b>1.2.32</b>Rewritten formatting routine to better support nested structures<br>
-            Improved known method highlighting.
+        <li><b>1.2.32</b> Rewritten formatting routine to better support nested structures<br>
+            Improved known method highlighting.<br>
             Fixed wring changed error suppression on extended annotations.
         </li>
         <li><b>1.2.28</b> Updated for Intellij 2025.2</li>
