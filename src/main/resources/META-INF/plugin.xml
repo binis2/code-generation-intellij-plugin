@@ -70,6 +70,9 @@
     <change-notes>
         <![CDATA[
       <ul>
+        <li><b>1.2.33</b> Select is highlighted<br>
+            Formatting improved for Solo Modifiers and select queries
+        </li>
         <li><b>1.2.32</b> Rewritten formatting routine to better support nested structures<br>
             Improved known method highlighting.<br>
             Fixed wring changed error suppression on extended annotations.

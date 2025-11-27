@@ -69,7 +69,7 @@ public class Lookup {
     private static final Map<String, ValidationDescription> validators = new ConcurrentHashMap<>();
     public static final Set<String> STARTERS = Set.of("create", "with", "find", "builder");
     public static final Map<String, Set<String>> ROUTINES = Map.of(
-            "net.binis.codegen.async.Async", Set.of("start", "flow", "delay", "lock", "execute", "collect"),
+            "net.binis.codegen.async.Async", Set.of("start", "flow", "delay", "lock", "execute", "collect", "virtual"),
             "net.binis.codegen.projection.Projection", Set.of("single", "list", "set"),
             "net.binis.codegen.map.Mapper", Set.of("map", "source", "strategy", "key", "destination", "custom", "producer", "register"));
     private static final Map<String, List<String>> knownTargetAwareClasses = Map.of(
@@ -116,6 +116,7 @@ public class Lookup {
         result.add("_self");
         result.add("_map");
         result.add("save");
+        result.add("select");
         result.add("delete");
         result.add("join");
         result.add("joinFetch");

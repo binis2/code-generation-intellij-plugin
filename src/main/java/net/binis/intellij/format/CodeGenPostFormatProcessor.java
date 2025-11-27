@@ -67,7 +67,7 @@ public class CodeGenPostFormatProcessor implements PostFormatProcessor {
                                         typeName = typeName.substring(0, idx);
                                     }
 
-                                    if ("save".equals(name) || ("done".equals(name) && !typeName.contains("Modify")) && params == 0) {
+                                    if ("save".equals(name) || ("done".equals(name) || "select".equals(name) || "where".equals(name) && !typeName.contains("Modify")) && params == 0) {
                                         var line = i;
                                         if (indents > 1) {
                                             indents--;
@@ -77,12 +77,12 @@ public class CodeGenPostFormatProcessor implements PostFormatProcessor {
                                             exec.add(() -> toIndent(document, line, indentSize * ind));
                                         }
                                         exec.add(() -> toIndentBack(document, line, indentSize));
-                                    } else if (typeName.contains("EmbeddedCollectionModify") && ("_add".equals(name) || "_get".equals(name) || "_insert".equals(name) || "_first".equals(name) || "_last".equals(name))) {
+                                    } else if ((typeName.contains("EmbeddedCollectionModify") && ("_add".equals(name) || "_get".equals(name) || "_insert".equals(name) || "_first".equals(name) || "_last".equals(name)))) {
                                         var line = i;
                                         var ind = indents;
                                         exec.add(() -> toIndent(document, line, indentSize * ind));
                                         indents++;
-                                    } else if ((typeName.contains("EmbeddedCodeCollection") || typeName.contains("EmbeddedCollectionModify") || typeName.contains("CodeMap") || typeName.contains("CodeList") || typeName.contains("CodeSet")) && params != 0) {
+                                    } else if ((typeName.contains("EmbeddedCodeCollection") || typeName.contains("EmbeddedSoloModify") || typeName.contains("EmbeddedCollectionModify") || typeName.contains("CodeMap") || typeName.contains("CodeList") || typeName.contains("CodeSet")) && params != 0) {
                                         var line = i;
                                         var ind = indents;
                                         exec.add(() -> toIndent(document, line, indentSize * ind));
