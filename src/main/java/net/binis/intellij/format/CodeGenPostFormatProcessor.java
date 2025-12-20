@@ -40,7 +40,7 @@ public class CodeGenPostFormatProcessor implements PostFormatProcessor {
                 ApplicationManager.getApplication().runWriteAction(() -> {
                     PsiDocumentManager.getInstance(project).commitDocument(document);
                     var exec = new ArrayList<Runnable>();
-                    var indents = 1;
+                    var indents = 0;
                     for (var i = 0; i < document.getLineCount(); i++) {
                         var startOffset = document.getLineStartOffset(i);
                         var endOffset = document.getLineEndOffset(i);
@@ -67,27 +67,30 @@ public class CodeGenPostFormatProcessor implements PostFormatProcessor {
                                         typeName = typeName.substring(0, idx);
                                     }
 
-                                    if ("save".equals(name) || ("done".equals(name) || "select".equals(name) || "where".equals(name) && !typeName.contains("Modify")) && params == 0) {
+                                    if ("save".equals(name) || ("done".equals(name) || "select".equals(name) || "where".equals(name) || "ensure".equals(name) && !typeName.contains("Modify")) && params == 0) {
                                         var line = i;
-                                        if (indents > 1) {
+                                        if (indents > 0) {
                                             indents--;
-                                        }
-                                        if (indents > 1) {
                                             var ind = indents;
                                             exec.add(() -> toIndent(document, line, indentSize * ind));
+                                        } else {
+                                            exec.add(() -> toIndentBack(document, line, indentSize));
                                         }
-                                        exec.add(() -> toIndentBack(document, line, indentSize));
                                     } else if ((typeName.contains("EmbeddedCollectionModify") && ("_add".equals(name) || "_get".equals(name) || "_insert".equals(name) || "_first".equals(name) || "_last".equals(name)))) {
                                         var line = i;
                                         var ind = indents;
                                         exec.add(() -> toIndent(document, line, indentSize * ind));
                                         indents++;
-                                    } else if ((typeName.contains("EmbeddedCodeCollection") || typeName.contains("EmbeddedSoloModify") || typeName.contains("EmbeddedCollectionModify") || typeName.contains("CodeMap") || typeName.contains("CodeList") || typeName.contains("CodeSet")) && params != 0) {
-                                        var line = i;
-                                        var ind = indents;
-                                        exec.add(() -> toIndent(document, line, indentSize * ind));
+                                    } else if ((typeName.contains("EmbeddedCodeCollection") || typeName.contains("EmbeddedSoloModify") || typeName.contains("EmbeddedCollectionModify") || typeName.contains("CodeMap") || typeName.contains("CodeList") || typeName.contains("CodeSet"))) {
+                                        if (params == 0) {
+                                            indents++;
+                                        } else {
+                                            var line = i;
+                                            var ind = indents;
+                                            exec.add(() -> toIndent(document, line, indentSize * ind));
+                                        }
                                     } else {
-                                        if (indents > 1) {
+                                        if (indents > 0) {
                                             indents--;
                                         }
                                     }
