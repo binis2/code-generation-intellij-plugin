@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.binis.intellij"
-version = "1.2.33"
+version = "1.2.35"
 
 repositories {
     mavenLocal()
@@ -17,7 +17,7 @@ repositories {
 }
 
 dependencies {
-    implementation("dev.binis:code-generator:1.2.33")
+    implementation("dev.binis:code-generator:1.2.35")
     intellijPlatform {
         intellijIdeaCommunity("2025.2")
         bundledPlugin("com.intellij.java")
