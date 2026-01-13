@@ -116,6 +116,8 @@ public class Lookup {
         result.add("_self");
         result.add("_map");
         result.add("save");
+        result.add("_open");
+        result.add("_close");
         result.add("saveAndFlush");
         result.add("select");
         result.add("delete");

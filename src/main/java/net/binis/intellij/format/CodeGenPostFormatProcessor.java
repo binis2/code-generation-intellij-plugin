@@ -67,7 +67,7 @@ public class CodeGenPostFormatProcessor implements PostFormatProcessor {
                                         typeName = typeName.substring(0, idx);
                                     }
 
-                                    if ("save".equals(name) || ("done".equals(name) || "select".equals(name) || "where".equals(name) || "order".equals(name) || "ensure".equals(name) || "saveAndFlush".equals(name) || "tuple".equals(name) || "tuples".equals(name) && !typeName.contains("Modify")) && params == 0) {
+                                    if ("save".equals(name) || ("done".equals(name) || "select".equals(name) || "where".equals(name) || "order".equals(name) || "ensure".equals(name) || "saveAndFlush".equals(name) || "tuple".equals(name) || "tuples".equals(name) || "delete".equals(name) || "run".equals(name) && !typeName.contains("Modify")) && params == 0) {
                                         var line = i;
                                         if (indents > 0) {
                                             indents--;
