@@ -16,7 +16,7 @@ public final class InspectionBundle extends DynamicBundle {
   public static final String BUNDLE = "messages.InspectionBundle";
 
   private InspectionBundle() {
-    super(BUNDLE);
+    super(InspectionBundle.class, BUNDLE);
   }
 
   public static @Nls String message(@NotNull @PropertyKey(resourceBundle = BUNDLE) String key,

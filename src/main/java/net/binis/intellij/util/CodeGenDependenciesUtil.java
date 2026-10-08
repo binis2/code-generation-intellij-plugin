@@ -1,7 +1,6 @@
 package net.binis.intellij.util;
 
 import com.intellij.compiler.CompilerConfiguration;
-import com.intellij.ide.plugins.cl.PluginClassLoader;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
@@ -85,10 +84,6 @@ public class CodeGenDependenciesUtil {
     @SuppressWarnings("unchecked")
     protected static List<URL> getUrls() {
         ClassLoader cl = CodeGenDependenciesUtil.class.getClassLoader();
-        if (cl instanceof PluginClassLoader loader) {
-            return loader.getUrls();
-        }
-
         var getURLs = getURLsMethod(cl);
         if (nonNull(getURLs)) {
             var urls = Reflection.invoke(getURLs, cl);

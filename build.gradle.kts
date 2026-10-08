@@ -1,11 +1,17 @@
 plugins {
     id("java")
-    id("org.jetbrains.intellij.platform") version "2.10.5"
-    id("io.freefair.lombok") version "8.13.1"
+    id("org.jetbrains.intellij.platform") version "2.19.0"
+    id("io.freefair.lombok") version "9.8.0"
 }
 
 group = "net.binis.intellij"
-version = "1.2.35"
+version = "1.4.0"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
 
 repositories {
     mavenLocal()
@@ -17,9 +23,9 @@ repositories {
 }
 
 dependencies {
-    implementation("dev.binis:code-generator:1.2.35")
+    implementation("dev.binis:code-generator:1.4.0")
     intellijPlatform {
-        intellijIdeaCommunity("2025.2")
+        intellijIdea("2026.2.3")
         bundledPlugin("com.intellij.java")
     }
 }
@@ -29,10 +35,12 @@ intellijPlatform {
 
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "252"
+            sinceBuild = "262"
         }
     }
     pluginVerification  {
+        // The published plugin ID contains "intellij" and can't be changed anymore.
+        freeArgs = listOf("-mute", "TemplateWordInPluginId")
         ides {
             recommended()
         }
