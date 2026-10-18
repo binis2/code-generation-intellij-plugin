@@ -9,6 +9,7 @@ import com.intellij.lang.jvm.annotation.JvmNestedAnnotationValue;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.roots.ProjectFileIndex;
@@ -382,6 +383,9 @@ public class Lookup {
 
     public static Optional<PsiClass> findClass(String name) {
         for (var project : ProjectManager.getInstance().getOpenProjects()) {
+            if (DumbService.isDumb(project)) {
+                continue;
+            }
             for (var c : JavaPsiFacade.getInstance(project).findClasses(name, GlobalSearchScope.allScope(project))) {
                 return Optional.of(c);
             }

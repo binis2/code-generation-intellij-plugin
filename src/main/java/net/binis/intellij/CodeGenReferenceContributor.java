@@ -56,6 +56,9 @@ public class CodeGenReferenceContributor extends PsiReferenceContributor {
     protected PsiReference[] buildClassReferences(PsiElement element, String value) {
         var result = new ArrayList<PsiReference>();
         for (var project : ProjectManager.getInstance().getOpenProjects()) {
+            if (DumbService.isDumb(project)) {
+                continue;
+            }
             for (var cls : JavaPsiFacade.getInstance(project).findClasses(value, GlobalSearchScope.allScope(project))) {
                 result.add(new CodeGenReference(element, new TextRange(1, value.length() + 1), cls));
             }
